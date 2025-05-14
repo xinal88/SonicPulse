@@ -1,5 +1,6 @@
 import { createContext, useEffect, useRef, useState } from "react";
 import axios from 'axios';
+import { fetchAndParseLRC } from "../utils/lrcParser";
 
 export const PlayerContext = createContext();
 
@@ -21,6 +22,20 @@ const PlayerContextProvider = (props) => {
     // To handle intent to play after track selection
     const [playOnLoad, setPlayOnLoad] = useState(false);
 
+    // Lyrics state
+    const [currentLyrics, setCurrentLyrics] = useState([]);
+    const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
+    const [showLyrics, setShowLyrics] = useState(false);
+    const [hasPrevious, setHasPrevious] = useState(false);
+    const [hasNext, setHasNext] = useState(false);
+
+    // Function to toggle lyrics display
+    const toggleLyrics = () => {
+        if (currentLyrics && currentLyrics.length > 0) {
+            setShowLyrics(prev => !prev);
+        }
+    };
+
 
     // Fetch initial data on mount
     useEffect(() => {
@@ -30,7 +45,7 @@ const PlayerContextProvider = (props) => {
                 if (response.data.success && response.data.songs.length > 0) {
                     setSongsData(response.data.songs);
                     // Optionally set the first song as the initial track, but don't auto-play
-                    // setTrack(response.data.songs[0]); 
+                    // setTrack(response.data.songs[0]);
                 } else {
                     setSongsData([]);
                 }
@@ -59,7 +74,28 @@ const PlayerContextProvider = (props) => {
     useEffect(() => {
         if (track && track.file) { // track.file should be the audio URL
             const audio = audioRef.current;
-            
+
+            // Reset lyrics state
+            setCurrentLyrics([]);
+            setActiveLyricIndex(-1);
+
+            // Fetch and parse LRC file if available
+            const fetchLyrics = async () => {
+                if (track.lrcFile) {
+                    try {
+                        const parsedLyrics = await fetchAndParseLRC(track.lrcFile);
+                        if (parsedLyrics.length > 0) {
+                            setCurrentLyrics(parsedLyrics);
+                            console.log(`Loaded ${parsedLyrics.length} lyric lines`);
+                        }
+                    } catch (error) {
+                        console.error("Error loading lyrics:", error);
+                    }
+                }
+            };
+
+            fetchLyrics();
+
             // Event listener for when metadata is loaded (duration is available)
             const handleLoadedMetadata = () => {
                 setTime(prev => ({
@@ -76,6 +112,8 @@ const PlayerContextProvider = (props) => {
                 if (seekBar.current) { // Ensure seekBar ref is available
                     seekBar.current.style.width = (Math.floor(audio.currentTime / audio.duration * 100)) + '%';
                 }
+
+                const currentTimeMs = audio.currentTime * 1000;
                 setTime(prev => ({
                     ...prev,
                     currentTime: {
@@ -83,13 +121,31 @@ const PlayerContextProvider = (props) => {
                         minute: Math.floor(audio.currentTime / 60)
                     }
                 }));
+
+                // Update active lyric based on current time
+                if (currentLyrics.length > 0) {
+                    // Find the last lyric that should be displayed at the current time
+                    let newActiveIndex = -1;
+                    for (let i = 0; i < currentLyrics.length; i++) {
+                        if (currentLyrics[i].time <= currentTimeMs) {
+                            newActiveIndex = i;
+                        } else {
+                            break; // Lyrics are sorted by time, so we can stop once we find a future lyric
+                        }
+                    }
+
+                    if (newActiveIndex !== activeLyricIndex) {
+                        setActiveLyricIndex(newActiveIndex);
+                    }
+                }
             };
-            
+
             // Event listener for when the song ends
             const handleSongEnd = () => {
                 // Implement what happens when a song ends (e.g., play next, stop)
                 // For now, just set playStatus to false
-                setPlayStatus(false); 
+                setPlayStatus(false);
+                setActiveLyricIndex(-1); // Reset active lyric
                 // You might want to call next() here if continuous play is desired
             };
 
@@ -107,7 +163,7 @@ const PlayerContextProvider = (props) => {
                     }
                 }
             };
-            
+
             // Clean up previous event listeners before adding new ones
             audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
             audio.removeEventListener('timeupdate', handleTimeUpdate);
@@ -142,7 +198,7 @@ const PlayerContextProvider = (props) => {
                 audio.removeEventListener('canplaythrough', handleCanPlay);
                 // Optional: Pause and reset src if track is removed or component unmounts
                 // audio.pause();
-                // if (!track) audio.src = ''; 
+                // if (!track) audio.src = '';
             };
         }
     }, [track, playOnLoad]); // Rerun when track or playOnLoad changes
@@ -188,29 +244,60 @@ const PlayerContextProvider = (props) => {
         return songsData.findIndex(item => item._id === track._id);
     };
 
+    // Update navigation button states based on current track index
+    const updateNavigationStates = () => {
+        const currentIndex = findCurrentTrackIndex();
+        if (currentIndex === -1) {
+            setHasPrevious(false);
+            setHasNext(false);
+            return;
+        }
+
+        setHasPrevious(currentIndex > 0);
+        setHasNext(currentIndex < songsData.length - 1);
+    };
+
+    // Effect to update navigation states when track or songsData changes
+    useEffect(() => {
+        updateNavigationStates();
+    }, [track, songsData]);
+
     const previous = async () => {
-        songsData.map(async (item, index) => {
-            if (track._id === item._id && index > 0) {
-                await setTrack(songsData[index - 1]);
-                await audioRef.current.play();
-                setPlayStatus(true);
-            }
-        })
+        const currentIndex = findCurrentTrackIndex();
+        if (currentIndex > 0) {
+            await setTrack(songsData[currentIndex - 1]);
+            await audioRef.current.play();
+            setPlayStatus(true);
+        }
     };
 
     const next = async () => {
-        songsData.map(async (item, index) => {
-            if (track._id === item._id && index < songsData.length) {
-                await setTrack(songsData[index + 1]);
-                await audioRef.current.play();
-                setPlayStatus(true);
-            }
-        })
+        const currentIndex = findCurrentTrackIndex();
+        if (currentIndex !== -1 && currentIndex < songsData.length - 1) {
+            await setTrack(songsData[currentIndex + 1]);
+            await audioRef.current.play();
+            setPlayStatus(true);
+        }
     };
 
     const seekSong = (e) => {
         if (audioRef.current && audioRef.current.duration && seekBg.current) {
-            audioRef.current.currentTime = ((e.nativeEvent.offsetX / seekBg.current.offsetWidth) * audioRef.current.duration);
+            const newTime = ((e.nativeEvent.offsetX / seekBg.current.offsetWidth) * audioRef.current.duration);
+            audioRef.current.currentTime = newTime;
+
+            // Update active lyric index when seeking
+            if (currentLyrics.length > 0) {
+                const currentTimeMs = newTime * 1000;
+                let newActiveIndex = -1;
+                for (let i = 0; i < currentLyrics.length; i++) {
+                    if (currentLyrics[i].time <= currentTimeMs) {
+                        newActiveIndex = i;
+                    } else {
+                        break;
+                    }
+                }
+                setActiveLyricIndex(newActiveIndex);
+            }
         }
     };
 
@@ -224,8 +311,14 @@ const PlayerContextProvider = (props) => {
         play, pause,
         playWithId,
         previous, next,
+        hasPrevious, hasNext,
         seekSong,
-        songsData, albumsData
+        songsData, albumsData,
+        currentLyrics,
+        activeLyricIndex,
+        showLyrics,
+        setShowLyrics,
+        toggleLyrics
     };
 
     return (

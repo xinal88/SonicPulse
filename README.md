@@ -3,11 +3,11 @@
 ### Project Software Engineering
 
 ### Member: <br>
-Pham Quang Anh - 20220071 <br>
-Trinh Manh Quynh <br>
-Ngo Minh Trung <br>
-Bui Dang Quy <br>
-Nguyen Long Vu
+Phạm Quang Anh - 20220071 <br>
+Trịnh Mạnh Quỳnh - 20226064 <br>
+Ngô Minh Trung - 20226004 <br>
+Bùi Đăng Quý - 20225995 <br>
+Nguyễn Long Vũ - 20226006
 
 ### How to setup:
 - Install NodeJS LTS version 22.15.0: https://nodejs.org/en

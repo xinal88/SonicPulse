@@ -8,6 +8,7 @@ import play_icon from './play.png'
 import pause_icon from './pause.png'
 import plays_icon from './plays.png'
 import prev_icon from './prev.png'
+import mute_icon from './mute.png'
 import search_icon from './search.png'
 import shuffle_icon from './shuffle.png'
 import speaker_icon from './speaker.png'
@@ -41,6 +42,8 @@ import img16 from './img16.jpg'
 import song1 from  './song1.mp3'
 import song2 from  './song2.mp3'
 import song3 from  './song3.mp3'
+import loop1_icon from './loop1.png'
+import loopall_icon from './loopall.png'
 
 export const assets = {
     bell_icon,
@@ -66,7 +69,10 @@ export const assets = {
     arrow_left,
     arrow_right,
     spotify_logo,
-    clock_icon
+    clock_icon,
+    mute_icon,
+    loop1_icon,
+    loopall_icon
 }
 
 export const albumsData = [

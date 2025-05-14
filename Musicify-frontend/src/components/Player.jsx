@@ -1,10 +1,47 @@
+// Musicify-frontend/src/components/Player.jsx
 import React, { useContext } from 'react'
-import { assets } from '../assets/frontend-assets/assets'
-import { PlayerContext } from '../context/PlayerContext'
+import { assets } from '../assets/frontend-assets/assets' //
+import { PlayerContext } from '../context/PlayerContext' //
 
 const Player = () => {
 
-    const {seekSong, time, track, seekBar, seekBg, playStatus, play, pause, previous, next} = useContext(PlayerContext);
+    const {
+        seekSong, 
+        time, 
+        track, 
+        seekBar, 
+        seekBg, 
+        playStatus, 
+        play, 
+        pause, 
+        previous, 
+        next, 
+        loopMode, // Get from context
+        toggleLoopMode, // Get from context
+        LOOP_MODE // Get from context
+    } = useContext(PlayerContext);
+
+    // Function to get the style for the loop button based on loopMode
+    const getLoopIconStyle = () => {
+        switch (loopMode) {
+            case LOOP_MODE.LOOP_ONE:
+                return { filter: 'brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(80deg)' }; // Example: Greenish tint
+            case LOOP_MODE.LOOP_ALL:
+                return { filter: 'brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(180deg)' }; // Example: Blueish tint
+            default:
+                return {}; // Default style
+        }
+    };
+    
+    // Function to get the loop icon (could also be different icons per mode)
+    const getLoopIcon = () => {
+        // If you have different icons for different modes, you can switch them here.
+        // For now, we'll just use the single loop_icon and change its style.
+        // Example:
+        // if (loopMode === LOOP_MODE.LOOP_ONE) return assets.loop_one_icon;
+        // if (loopMode === LOOP_MODE.LOOP_ALL) return assets.loop_all_icon;
+        return assets.loop_icon;
+    }
 
   return track ? (
     <div className='h-[10%] bg-black flex justify-between items-center text-white px-4'>
@@ -17,13 +54,23 @@ const Player = () => {
         </div>
         <div className='flex flex-col items-center gap-1 m-auto'>
             <div className='flex gap-4'>
-                <img className='w-4 cursor-pointer' src={assets.shuffle_icon} alt="" />
-                <img onClick={previous} className='w-4 cursor-pointer' src={assets.prev_icon} alt="" />
+                <img className='w-4 cursor-pointer' src={assets.shuffle_icon} alt="Shuffle" />
+                <img onClick={previous} className='w-4 cursor-pointer' src={assets.prev_icon} alt="Previous" />
                 {playStatus
-                ? <img onClick={pause} className='w-4 cursor-pointer' src={assets.pause_icon} alt="" />
-                : <img onClick={play} className='w-4 cursor-pointer' src={assets.play_icon} alt="" />} 
-                <img onClick={next} className='w-4 cursor-pointer' src={assets.next_icon} alt="" />
-                <img className='w-4 cursor-pointer' src={assets.loop_icon} alt="" />
+                ? <img onClick={pause} className='w-4 cursor-pointer' src={assets.pause_icon} alt="Pause" />
+                : <img onClick={play} className='w-4 cursor-pointer' src={assets.play_icon} alt="Play" />} 
+                <img onClick={next} className='w-4 cursor-pointer' src={assets.next_icon} alt="Next" />
+                <img 
+                    onClick={toggleLoopMode} 
+                    className='w-4 cursor-pointer' 
+                    src={getLoopIcon()} // Use function to get potentially different icons
+                    style={getLoopIconStyle()} // Apply dynamic style
+                    alt="Loop" 
+                    title={
+                        loopMode === LOOP_MODE.NO_LOOP ? "Loop: Off" :
+                        loopMode === LOOP_MODE.LOOP_ONE ? "Loop: One" : "Loop: All"
+                    } // Add a title for better UX
+                />
             </div>
             <div className='flex items-center gap-5'>
                 <p>{time.currentTime.minute}:{time.currentTime.second}</p>

@@ -154,14 +154,6 @@ const PlayerContextProvider = (props) => {
             };
 
             // Event listener for when the song ends
-            const handleSongEnd = () => {
-                // Implement what happens when a song ends (e.g., play next, stop)
-                // For now, just set playStatus to false
-                setPlayStatus(false);
-                setActiveLyricIndex(-1); // Reset active lyric
-                // You might want to call next() here if continuous play is desired
-            
-            // Modified Event listener for when the song ends
             const handleSongEnd = async () => {
                 switch (loopMode) {
                     case LOOP_MODE.LOOP_ONE:
@@ -183,6 +175,7 @@ const PlayerContextProvider = (props) => {
                     case LOOP_MODE.NO_LOOP:
                     default:
                         setPlayStatus(false);
+                        setActiveLyricIndex(-1); // Reset active lyric
                         // Optionally move to the next song
                         // await next(); // Uncomment to automatically play next song
                         break;
@@ -311,12 +304,6 @@ const PlayerContextProvider = (props) => {
             setPlayOnLoad(true);
             setLoopCount(0);
         }
-        const currentIndex = findCurrentTrackIndex();
-        if (currentIndex > 0) {
-            await setTrack(songsData[currentIndex - 1]);
-            await audioRef.current.play();
-            setPlayStatus(true);
-        }
     };
 
     const next = async () => {
@@ -329,14 +316,6 @@ const PlayerContextProvider = (props) => {
             setTrack(songsData[0]);
             setPlayOnLoad(true);
             setLoopCount(0);
-        }
-    };
-    
-        const currentIndex = findCurrentTrackIndex();
-        if (currentIndex !== -1 && currentIndex < songsData.length - 1) {
-            await setTrack(songsData[currentIndex + 1]);
-            await audioRef.current.play();
-            setPlayStatus(true);
         }
     };
 
@@ -384,11 +363,10 @@ const PlayerContextProvider = (props) => {
         previous, next,
         hasPrevious, hasNext,
         seekSong,
-        songsData, albumsData,
         // Expose loop state and toggle function
         loopMode,
         toggleLoopMode,
-        LOOP_MODE // Expose LOOP_MODE constants if needed by components
+        LOOP_MODE, // Expose LOOP_MODE constants if needed by components
         songsData, albumsData,
         currentLyrics,
         activeLyricIndex,

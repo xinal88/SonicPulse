@@ -1,24 +1,29 @@
 // Musicify-frontend/src/components/Player.jsx
 import React, { useContext } from 'react'
-import { assets } from '../assets/frontend-assets/assets' //
-import { PlayerContext } from '../context/PlayerContext' //
+import { assets } from '../assets/frontend-assets/assets'
+import { PlayerContext } from '../context/PlayerContext'
 
 const Player = () => {
 
     const {
-        seekSong, 
-        time, 
-        track, 
-        seekBar, 
-        seekBg, 
-        playStatus, 
-        play, 
-        pause, 
-        previous, 
-        next, 
-        loopMode, // Get from context
-        toggleLoopMode, // Get from context
-        LOOP_MODE // Get from context
+        seekSong,
+        time,
+        track,
+        seekBar,
+        seekBg,
+        playStatus,
+        play,
+        pause,
+        previous,
+        next,
+        loopMode,
+        toggleLoopMode,
+        LOOP_MODE,
+        hasPrevious,
+        hasNext,
+        toggleLyrics,
+        currentLyrics,
+        showLyrics
     } = useContext(PlayerContext);
 
     // Function to get the style for the loop button based on loopMode
@@ -32,7 +37,7 @@ const Player = () => {
                 return {}; // Default style
         }
     };
-    
+
     // Function to get the loop icon (could also be different icons per mode)
     const getLoopIcon = () => {
         // If you have different icons for different modes, you can switch them here.
@@ -42,12 +47,6 @@ const Player = () => {
         // if (loopMode === LOOP_MODE.LOOP_ALL) return assets.loop_all_icon;
         return assets.loop_icon;
     }
-    const {
-        seekSong, time, track, seekBar, seekBg,
-        playStatus, play, pause, previous, next,
-        hasPrevious, hasNext, toggleLyrics,
-        currentLyrics, showLyrics
-    } = useContext(PlayerContext);
 
   return track ? (
     <div className='h-[10%] bg-black flex justify-between items-center text-white px-4'>
@@ -60,7 +59,7 @@ const Player = () => {
         </div>
         <div className='flex flex-col items-center gap-1 m-auto'>
             <div className='flex gap-4'>
-                <img className='w-4 cursor-pointer' src={assets.shuffle_icon} alt="" />
+                <img className='w-4 cursor-pointer' src={assets.shuffle_icon} alt="Shuffle" />
                 <img
                     onClick={hasPrevious ? previous : undefined}
                     className={`w-4 ${hasPrevious ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
@@ -68,25 +67,9 @@ const Player = () => {
                     alt="Previous"
                     title={hasPrevious ? "Previous song" : "No previous song"}
                 />
-                <img className='w-4 cursor-pointer' src={assets.shuffle_icon} alt="Shuffle" />
-                <img onClick={previous} className='w-4 cursor-pointer' src={assets.prev_icon} alt="Previous" />
                 {playStatus
                 ? <img onClick={pause} className='w-4 cursor-pointer' src={assets.pause_icon} alt="Pause" />
-                : <img onClick={play} className='w-4 cursor-pointer' src={assets.play_icon} alt="Play" />} 
-                <img onClick={next} className='w-4 cursor-pointer' src={assets.next_icon} alt="Next" />
-                <img 
-                    onClick={toggleLoopMode} 
-                    className='w-4 cursor-pointer' 
-                    src={getLoopIcon()} // Use function to get potentially different icons
-                    style={getLoopIconStyle()} // Apply dynamic style
-                    alt="Loop" 
-                    title={
-                        loopMode === LOOP_MODE.NO_LOOP ? "Loop: Off" :
-                        loopMode === LOOP_MODE.LOOP_ONE ? "Loop: One" : "Loop: All"
-                    } // Add a title for better UX
-                />
-                ? <img onClick={pause} className='w-4 cursor-pointer' src={assets.pause_icon} alt="" />
-                : <img onClick={play} className='w-4 cursor-pointer' src={assets.play_icon} alt="" />}
+                : <img onClick={play} className='w-4 cursor-pointer' src={assets.play_icon} alt="Play" />}
                 <img
                     onClick={hasNext ? next : undefined}
                     className={`w-4 ${hasNext ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
@@ -94,7 +77,17 @@ const Player = () => {
                     alt="Next"
                     title={hasNext ? "Next song" : "No next song"}
                 />
-                <img className='w-4 cursor-pointer' src={assets.loop_icon} alt="" />
+                <img
+                    onClick={toggleLoopMode}
+                    className='w-4 cursor-pointer'
+                    src={getLoopIcon()}
+                    style={getLoopIconStyle()}
+                    alt="Loop"
+                    title={
+                        loopMode === LOOP_MODE.NO_LOOP ? "Loop: Off" :
+                        loopMode === LOOP_MODE.LOOP_ONE ? "Loop: One" : "Loop: All"
+                    }
+                />
             </div>
             <div className='flex items-center gap-5'>
                 <p>{time.currentTime.minute}:{time.currentTime.second}</p>

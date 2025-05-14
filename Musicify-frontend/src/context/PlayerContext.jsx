@@ -1,8 +1,16 @@
+// Musicify-frontend/src/context/PlayerContext.jsx
 import { createContext, useEffect, useRef, useState } from "react";
 import axios from 'axios';
 import { fetchAndParseLRC } from "../utils/lrcParser";
 
 export const PlayerContext = createContext();
+
+// Define Loop Modes
+const LOOP_MODE = {
+    NO_LOOP: 0, // Song plays once, then stops
+    LOOP_ONE: 1, // Song plays twice, then stops
+    LOOP_ALL: 2  // Song loops indefinitely
+};
 
 const PlayerContextProvider = (props) => {
     const audioRef = useRef(new Audio()); // Initialize Audio object here
@@ -21,6 +29,11 @@ const PlayerContextProvider = (props) => {
     });
     // To handle intent to play after track selection
     const [playOnLoad, setPlayOnLoad] = useState(false);
+
+    // New state for loop mode
+    const [loopMode, setLoopMode] = useState(LOOP_MODE.NO_LOOP);
+    // New state to count plays for LOOP_ONE mode
+    const [loopCount, setLoopCount] = useState(0);
 
     // Lyrics state
     const [currentLyrics, setCurrentLyrics] = useState([]);
@@ -147,6 +160,33 @@ const PlayerContextProvider = (props) => {
                 setPlayStatus(false);
                 setActiveLyricIndex(-1); // Reset active lyric
                 // You might want to call next() here if continuous play is desired
+            
+            // Modified Event listener for when the song ends
+            const handleSongEnd = async () => {
+                switch (loopMode) {
+                    case LOOP_MODE.LOOP_ONE:
+                        if (loopCount < 1) { // Play once more (total 2 times)
+                            setLoopCount(prev => prev + 1);
+                            audio.currentTime = 0;
+                            await play();
+                        } else {
+                            setPlayStatus(false);
+                            setLoopCount(0); // Reset for next time
+                            // Optionally move to the next song or just stop
+                            // await next(); // Uncomment to play next song after LOOP_ONE completes
+                        }
+                        break;
+                    case LOOP_MODE.LOOP_ALL:
+                        audio.currentTime = 0;
+                        await play();
+                        break;
+                    case LOOP_MODE.NO_LOOP:
+                    default:
+                        setPlayStatus(false);
+                        // Optionally move to the next song
+                        // await next(); // Uncomment to automatically play next song
+                        break;
+                }
             };
 
             // Event listener for when the audio can play (good time to actually play)
@@ -174,6 +214,7 @@ const PlayerContextProvider = (props) => {
             if (audio.src !== track.file) { // Only update if src is different
                 audio.src = track.file;
                 audio.load(); // Important: load the new source
+                setLoopCount(0); // Reset loop count when track changes
             }
 
 
@@ -201,7 +242,7 @@ const PlayerContextProvider = (props) => {
                 // if (!track) audio.src = '';
             };
         }
-    }, [track, playOnLoad]); // Rerun when track or playOnLoad changes
+    }, [track, playOnLoad, loopMode, loopCount]); // Added loopMode and loopCount as dependencies
 
     const play = async () => {
         if (audioRef.current && audioRef.current.src && audioRef.current.paused) {
@@ -230,11 +271,12 @@ const PlayerContextProvider = (props) => {
                 // pause(); // Example: pause if same song is clicked while playing
             } else if (track && track._id === selectedTrack._id && audioRef.current.paused) {
                 // If same song is clicked and it's paused, play it
-                play();
+                await play();
             }
             else {
                 setTrack(selectedTrack);
                 setPlayOnLoad(true); // Set intent to play this track once loaded
+                setLoopCount(0); // Reset loop count when a new song is played
             }
         }
     };
@@ -265,6 +307,12 @@ const PlayerContextProvider = (props) => {
     const previous = async () => {
         const currentIndex = findCurrentTrackIndex();
         if (currentIndex > 0) {
+            setTrack(songsData[currentIndex - 1]);
+            setPlayOnLoad(true);
+            setLoopCount(0);
+        }
+        const currentIndex = findCurrentTrackIndex();
+        if (currentIndex > 0) {
             await setTrack(songsData[currentIndex - 1]);
             await audioRef.current.play();
             setPlayStatus(true);
@@ -272,6 +320,18 @@ const PlayerContextProvider = (props) => {
     };
 
     const next = async () => {
+        const currentIndex = findCurrentTrackIndex();
+        if (currentIndex < songsData.length - 1) {
+            setTrack(songsData[currentIndex + 1]);
+            setPlayOnLoad(true);
+            setLoopCount(0);
+        } else if (loopMode === LOOP_MODE.LOOP_ALL && songsData.length > 0) { // Loop back to first song if LOOP_ALL
+            setTrack(songsData[0]);
+            setPlayOnLoad(true);
+            setLoopCount(0);
+        }
+    };
+    
         const currentIndex = findCurrentTrackIndex();
         if (currentIndex !== -1 && currentIndex < songsData.length - 1) {
             await setTrack(songsData[currentIndex + 1]);
@@ -301,6 +361,17 @@ const PlayerContextProvider = (props) => {
         }
     };
 
+    // Function to toggle loop mode
+    const toggleLoopMode = () => {
+        setLoopMode(prevMode => {
+            const nextMode = (prevMode + 1) % 3; // Cycle through 0, 1, 2
+            if (nextMode !== LOOP_MODE.LOOP_ONE) { // Reset loopCount if not entering LOOP_ONE
+                setLoopCount(0);
+            }
+            return nextMode;
+        });
+    };
+
     const contextValue = {
         audioRef,
         seekBar,
@@ -314,6 +385,11 @@ const PlayerContextProvider = (props) => {
         hasPrevious, hasNext,
         seekSong,
         songsData, albumsData,
+        // Expose loop state and toggle function
+        loopMode,
+        toggleLoopMode,
+        LOOP_MODE // Expose LOOP_MODE constants if needed by components
+        songsData, albumsData,
         currentLyrics,
         activeLyricIndex,
         showLyrics,
@@ -323,9 +399,6 @@ const PlayerContextProvider = (props) => {
 
     return (
         <PlayerContext.Provider value={contextValue}>
-            {/* Ensure audioRef is actually connected to an <audio> element if not using new Audio() directly */}
-            {/* If you don't have an <audio> tag in your JSX for this ref, the `new Audio()` approach is fine. */}
-            {/* Example: <audio ref={audioRef} /> somewhere in your app, but it's not strictly needed with `new Audio()` */}
             {props.children}
         </PlayerContext.Provider>
     );

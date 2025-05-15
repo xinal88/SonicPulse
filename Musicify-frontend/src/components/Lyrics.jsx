@@ -19,10 +19,21 @@ const Lyrics = () => {
   // Scroll to active lyric when it changes
   useEffect(() => {
     if (activeLineRef.current && lyricsContainerRef.current) {
-      // Scroll the active lyric into view with smooth animation
-      activeLineRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
+      // Calculate position to account for the fixed header
+      const headerHeight = 56; // Approximate height of the header (3.5rem)
+      const container = lyricsContainerRef.current;
+      const element = activeLineRef.current;
+      const elementRect = element.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+
+      // Calculate the scroll position that centers the element in the visible area
+      const scrollTop = element.offsetTop - container.offsetTop -
+                        (containerRect.height / 2) + (elementRect.height / 2) - headerHeight;
+
+      // Scroll with smooth animation
+      container.scrollTo({
+        top: scrollTop,
+        behavior: 'smooth'
       });
     }
   }, [activeLyricIndex]);
@@ -30,7 +41,7 @@ const Lyrics = () => {
   // If loading, show loading indicator
   if (isLoading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-gray-400">
+      <div className="h-full flex flex-col items-center justify-center text-gray-400 pt-8">
         <p className="text-lg">Loading lyrics...</p>
       </div>
     );
@@ -39,7 +50,7 @@ const Lyrics = () => {
   // If no lyrics or no track, show a message
   if (!track || !currentLyrics || currentLyrics.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-gray-400">
+      <div className="h-full flex flex-col items-center justify-center text-gray-400 pt-8">
         <p className="text-lg">No lyrics available for this song</p>
         <p className="text-sm mt-2">Try another song or check back later</p>
       </div>
@@ -50,8 +61,11 @@ const Lyrics = () => {
     <div className="h-full">
       <div
         ref={lyricsContainerRef}
-        className="h-full overflow-y-auto"
+        className="h-full overflow-y-auto pb-8"
       >
+        {/* Add some padding at the top for better spacing */}
+        <div className="pt-2"></div>
+
         {currentLyrics.map((lyric, index) => (
           <p
             key={index}
@@ -65,6 +79,9 @@ const Lyrics = () => {
             {lyric.text}
           </p>
         ))}
+
+        {/* Add some padding at the bottom for better spacing */}
+        <div className="pb-8"></div>
       </div>
     </div>
   );

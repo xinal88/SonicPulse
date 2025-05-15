@@ -15,11 +15,18 @@ const PlayerContextProvider = (props) => {
     const audioRef = useRef(new Audio()); // Initialize with a new Audio object
     const seekBg = useRef();
     const seekBar = useRef();
+    // Create a ref to store all seekbar elements that need to be updated
+    const seekBarsRef = useRef([]);
+    // Create a ref to store all seekBg elements
+    const seekBgRefs = useRef([]);
 
     const url = 'http://localhost:4000';
 
     const [songsData, setSongsData] = useState([]);
     const [albumsData, setAlbumsData] = useState([]);
+    const [artistsData, setArtistsData] = useState([]);
+    const [genresData, setGenresData] = useState([]);
+    const [randomGenres, setRandomGenres] = useState([]);
     const [track, setTrack] = useState(null);
     const [playStatus, setPlayStatus] = useState(false);
     const [time, setTime] = useState({
@@ -39,6 +46,10 @@ const PlayerContextProvider = (props) => {
     const [volume, setVolume] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
     const [previousVolume, setPreviousVolume] = useState(1); // Store volume before explicit mute
+    const [showNowPlaying, setShowNowPlaying] = useState(false);
+    const [showFullscreen, setShowFullscreen] = useState(false);
+    const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+    const [showQueue, setShowQueue] = useState(false);
 
     const [currentLyricsSource, setCurrentLyricsSource] = useState('');
 
@@ -122,15 +133,47 @@ const PlayerContextProvider = (props) => {
             }
         };
 
+        const getArtists = async () => {
+            try {
+                const response = await axios.get(`${url}/api/artist/list`);
+                if (response.data.success) {
+                    setArtistsData(response.data.artists);
+                }
+            } catch (error) {
+                console.error("Error fetching artists:", error);
+            }
+        };
+
+        const getGenres = async () => {
+            try {
+                const response = await axios.get(`${url}/api/genre/list`);
+                if (response.data.success) {
+                    const genres = response.data.genres;
+                    setGenresData(genres);
+
+                    // Select 3 random genres when genres are first loaded
+                    if (genres.length > 0 && randomGenres.length === 0) {
+                        // Shuffle the genres array and take the first 3
+                        const shuffled = [...genres].sort(() => 0.5 - Math.random());
+                        setRandomGenres(shuffled.slice(0, 3));
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching genres:", error);
+            }
+        };
+
         getSongs();
         getAlbums();
+        getArtists();
+        getGenres();
     }, [/*track, url*/]); // Consider dependencies carefully if you auto-set track
 
     // Effect to handle track changes
     useEffect(() => {
         if (track && track.file) {
             const audio = audioRef.current;
-            
+
             // Don't reset lyrics immediately - only when we know we need new ones
             // setCurrentLyrics([]);
             // setActiveLyricIndex(-1);
@@ -142,7 +185,7 @@ const PlayerContextProvider = (props) => {
                         if (track.lrcFile !== currentLyricsSource) {
                             setCurrentLyrics([]);
                             setActiveLyricIndex(-1);
-                            
+
                             const parsedLyrics = await fetchAndParseLRC(track.lrcFile);
                             if (parsedLyrics.length > 0) {
                                 setCurrentLyrics(parsedLyrics);
@@ -175,9 +218,22 @@ const PlayerContextProvider = (props) => {
             };
 
             const handleTimeUpdate = () => {
-                if (seekBar.current && audio.duration) { // Ensure audio.duration is not 0
+                // Update the main seekBar if it exists
+                if (seekBar.current && audio.duration) {
                     seekBar.current.style.width = (Math.floor(audio.currentTime / audio.duration * 100)) + '%';
                 }
+
+                // Update all registered seekbars
+                if (audio.duration) {
+                    const progressPercentage = (Math.floor(audio.currentTime / audio.duration * 100)) + '%';
+                    // Update all seekbars in the array
+                    seekBarsRef.current.forEach(bar => {
+                        if (bar && bar !== seekBar.current) { // Skip the main seekBar which was already updated
+                            bar.style.width = progressPercentage;
+                        }
+                    });
+                }
+
                 const currentTimeMs = audio.currentTime * 1000;
                 setTime(prev => ({
                     ...prev,
@@ -245,7 +301,7 @@ const PlayerContextProvider = (props) => {
                     }
                 }
             };
-            
+
             // Clean up previous event listeners
             audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
             audio.removeEventListener('timeupdate', handleTimeUpdate);
@@ -258,7 +314,7 @@ const PlayerContextProvider = (props) => {
                 audio.load(); // Important to load the new source
                 setLoopCount(0); // Reset loop count for the new track
             }
-            
+
             // Apply current volume and mute status from context to the audio element
             audio.volume = volume;
             audio.muted = isMuted;
@@ -310,7 +366,7 @@ const PlayerContextProvider = (props) => {
             setPlayStatus(false);
         }
     };
-    
+
     const toggleLyrics = () => {
         if (currentLyrics && currentLyrics.length > 0) {
             setShowLyrics(prev => !prev);
@@ -375,8 +431,11 @@ const PlayerContextProvider = (props) => {
     };
 
     const seekSong = (e) => {
-        if (audioRef.current && audioRef.current.duration && seekBg.current) {
-            const newTime = ((e.nativeEvent.offsetX / seekBg.current.offsetWidth) * audioRef.current.duration);
+        // Find the seekBg element that was clicked
+        const clickedElement = e.currentTarget;
+
+        if (audioRef.current && audioRef.current.duration && clickedElement) {
+            const newTime = ((e.nativeEvent.offsetX / clickedElement.offsetWidth) * audioRef.current.duration);
             audioRef.current.currentTime = newTime;
         }
     };
@@ -395,17 +454,75 @@ const PlayerContextProvider = (props) => {
         setShuffleMode(prev => !prev);
     };
 
+    // Toggle browser fullscreen mode
+    const toggleBrowserFullscreen = () => {
+        if (!document.fullscreenElement) {
+            // Enter fullscreen
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+            setIsFullscreenMode(true);
+        } else {
+            // Exit fullscreen
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+                setIsFullscreenMode(false);
+            }
+        }
+    };
+
+    // Toggle the Queue view
+    const toggleQueue = () => {
+        setShowQueue(prev => !prev);
+    };
+
+    // Function to register a seekbar element for updates
+    const registerSeekBar = (element) => {
+        if (element && !seekBarsRef.current.includes(element)) {
+            seekBarsRef.current.push(element);
+        }
+    };
+
+    // Function to unregister a seekbar element
+    const unregisterSeekBar = (element) => {
+        if (element) {
+            seekBarsRef.current = seekBarsRef.current.filter(bar => bar !== element);
+        }
+    };
+
+    // Function to register a seekBg element
+    const registerSeekBg = (element) => {
+        if (element && !seekBgRefs.current.includes(element)) {
+            seekBgRefs.current.push(element);
+            // Set the main seekBg ref to the first registered element if it's not set
+            if (!seekBg.current) {
+                seekBg.current = element;
+            }
+        }
+    };
+
+    // Function to unregister a seekBg element
+    const unregisterSeekBg = (element) => {
+        if (element) {
+            seekBgRefs.current = seekBgRefs.current.filter(bg => bg !== element);
+            // If the unregistered element was the main seekBg, set the main seekBg to the first available element
+            if (seekBg.current === element) {
+                seekBg.current = seekBgRefs.current.length > 0 ? seekBgRefs.current[0] : null;
+            }
+        }
+    };
+
     const playRandomSong = async () => {
         if (songsData.length <= 1) return;
-        
+
         const currentIndex = findCurrentTrackIndex();
         let randomIndex;
-        
+
         // Ensure we don't pick the same song
         do {
             randomIndex = Math.floor(Math.random() * songsData.length);
         } while (randomIndex === currentIndex);
-        
+
         setTrack(songsData[randomIndex]);
         setPlayOnLoad(true);
     };
@@ -425,7 +542,7 @@ const PlayerContextProvider = (props) => {
         loopMode,
         toggleLoopMode,
         LOOP_MODE,
-        songsData, albumsData,
+        songsData, albumsData, artistsData, genresData, randomGenres,
         currentLyrics,
         activeLyricIndex,
         showLyrics,
@@ -438,7 +555,23 @@ const PlayerContextProvider = (props) => {
         toggleMuteHandler,
         previousVolume, setPreviousVolume, // Expose if needed elsewhere, though primarily internal
         shuffleMode,
-        toggleShuffleMode
+        toggleShuffleMode,
+        // Now Playing View and Fullscreen
+        showNowPlaying,
+        setShowNowPlaying,
+        showFullscreen,
+        setShowFullscreen,
+        isFullscreenMode,
+        toggleBrowserFullscreen,
+        // Queue View
+        showQueue,
+        setShowQueue,
+        toggleQueue,
+        // Seekbar and SeekBg registration
+        registerSeekBar,
+        unregisterSeekBar,
+        registerSeekBg,
+        unregisterSeekBg
     };
 
     return (

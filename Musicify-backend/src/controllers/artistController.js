@@ -1,82 +1,76 @@
 import {v2 as cloudinary} from 'cloudinary'
-import albumModel from '../models/albumModel.js'
+import artistModel from '../models/artistModel.js'
 
-const addAlbum = async (req, res) => {
+const addArtist = async (req, res) => {
     try {
-
         const name = req.body.name;
-        const desc = req.body.desc;
         const bgColor = req.body.bgColor;
         const imageFile = req.file;
         const imageUpload = await cloudinary.uploader.upload(imageFile.path, {resource_type:"image"});
-        const albumData = {
+        const artistData = {
             name,
-            desc,
             bgColor,
             image: imageUpload.secure_url
         }
 
-        const album = albumModel(albumData);
-        await album.save();
+        const artist = artistModel(artistData);
+        await artist.save();
 
-        res.json({success: true, message: "Album added"})
+        res.json({success: true, message: "Artist added"})
 
     } catch (error) {
+        console.error("Error adding artist:", error);
         res.json({success: false})
     }
 }
 
-const listAlbum = async (req, res) => {
-
+const listArtist = async (req, res) => {
     try {
-        const allAlbums = await albumModel.find({});
-        res.json({success: true, albums: allAlbums});
+        const allArtists = await artistModel.find({});
+        res.json({success: true, artists: allArtists});
     } catch (error) {
+        console.error("Error listing artists:", error);
         res.json({success: false});
     }
-
 }
 
-const removeAlbum = async (req, res) => {
-
+const removeArtist = async (req, res) => {
     try {
-        await albumModel.findByIdAndDelete(req.body.id);
-        res.json({success: true, message: "Album deleted"});
+        await artistModel.findByIdAndDelete(req.body.id);
+        res.json({success: true, message: "Artist deleted"});
     } catch (error) {
+        console.error("Error removing artist:", error);
         res.json({success: false});
     }
-
 }
 
-const updateAlbum = async (req, res) => {
+const updateArtist = async (req, res) => {
     try {
         const { id } = req.body;
         const name = req.body.name;
-        const desc = req.body.desc;
         const bgColor = req.body.bgColor;
-
+        
         // Create update data object
         const updateData = {
             name,
-            desc,
             bgColor
         };
-
+        
         // If a new image is uploaded, process it
         if (req.file) {
             const imageFile = req.file;
             const imageUpload = await cloudinary.uploader.upload(imageFile.path, {resource_type:"image"});
             updateData.image = imageUpload.secure_url;
         }
-
-        // Update the album in the database
-        await albumModel.findByIdAndUpdate(id, updateData);
-
-        res.json({success: true, message: "Album updated"});
+        
+        // Update the artist in the database
+        await artistModel.findByIdAndUpdate(id, updateData);
+        
+        res.json({success: true, message: "Artist updated"});
     } catch (error) {
-        console.error("Error updating album:", error);
+        console.error("Error updating artist:", error);
         res.json({success: false});
     }
 }
 
-export {addAlbum, listAlbum, removeAlbum, updateAlbum};
+export {addArtist, listArtist, removeArtist, updateArtist};

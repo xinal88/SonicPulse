@@ -6,6 +6,11 @@ import AddAlbum from './pages/AddAlbum';
 import ListSong from './pages/ListSong';
 import ListAlbum from './pages/ListAlbum';
 import AddSong from './pages/AddSong';
+import EditAlbum from './pages/EditAlbum';
+import EditSong from './pages/EditSong';
+import AddArtist from './pages/AddArtist';
+import ListArtist from './pages/ListArtist';
+import EditArtist from './pages/EditArtist';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 
@@ -22,8 +27,13 @@ const App = () => {
             <Routes>
               <Route path='/add-song' element={<AddSong/>} />
               <Route path='/add-album' element={<AddAlbum/>} />
+              <Route path='/add-artist' element={<AddArtist/>} />
               <Route path='/list-song' element={<ListSong/>} />
               <Route path='/list-album' element={<ListAlbum/>} />
+              <Route path='/list-artist' element={<ListArtist/>} />
+              <Route path='/edit-album/:id' element={<EditAlbum/>} />
+              <Route path='/edit-song/:id' element={<EditSong/>} />
+              <Route path='/edit-artist/:id' element={<EditArtist/>} />
             </Routes>
           </div>
         </div>

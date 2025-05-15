@@ -3,3 +3,48 @@
 ::-webkit-scrollbar {
   display: none;
 }
+
+/* Custom styling for the volume slider */
+input[type="range"].volume-slider {
+  /* Tailwind classes on the input element itself handle the basic track appearance:
+     w-20 h-1 bg-slate-50 rounded-full appearance-none cursor-pointer accent-green-500
+     The `accent-green-500` class is crucial as it sets the accent-color,
+     which modern browsers use to color the filled part of the track and the thumb by default.
+     Our custom thumb styles below will override the thumb's default shape and color.
+  */
+}
+
+/* Custom styling for the volume slider thumb (for WebKit/Blink browsers like Chrome, Edge, Safari) */
+input[type="range"].volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; /* Remove default Sytles */
+  appearance: none; /* Remove default Sytles */
+  width: 6px;         /* Width of the thumb bar */
+  height: 16px;       /* Height of the thumb bar */
+  background: #22c55e; /* Green color (Tailwind's green-500: #22c55e) */
+  cursor: pointer;
+  border-radius: 3px; /* Slightly rounded edges for the bar */
+  /*
+    To vertically center a 16px tall thumb on a 4px tall track (h-1 from Tailwind):
+    margin-top = (track_height - thumb_height) / 2
+               = (4px - 16px) / 2 = -6px
+  */
+  margin-top: -6px;
+}
+
+/* Custom styling for the volume slider thumb (for Firefox) */
+input[type="range"].volume-slider::-moz-range-thumb {
+  width: 6px;         /* Width of the thumb bar */
+  height: 16px;       /* Height of the thumb bar */
+  background: #22c55e; /* Green color (Tailwind's green-500: #22c55e) */
+  cursor: pointer;
+  border-radius: 3px;
+  border: none;       /* Remove default border in Firefox */
+}
+
+/* Note on track styling:
+  - The track itself (the "bar" that the thumb slides on) is styled by Tailwind classes:
+    `h-1` (height: 0.25rem / 4px), `bg-slate-50` (background-color: #f8fafc), `rounded-full`.
+  - The filled portion of the track (the part indicating the current volume) should be
+    colored green by the `accent-green-500` class on the input element,
+    thanks to the `accent-color` CSS property.
+*/

@@ -9,8 +9,9 @@ const AddSong = () => {
 
   const [image,setImage] = useState(false);
   const [song,setSong] = useState(false);
+  const [lrcFile,setLrcFile] = useState(false);
   const [name,setName] = useState("");
-  const [desc,setDesc] = useState("");
+  const [artist,setArtist] = useState(""); // Changed from desc to artist
   const [album,setAlbum] = useState("none");
   const [loading,setLoading] = useState(false);
   const [albumData,setAlbumData] = useState([]);
@@ -21,20 +22,26 @@ const AddSong = () => {
     try {
       const formData = new FormData();
       formData.append('name', name);
-      formData.append('desc', desc);
+      formData.append('artist', artist); // Changed from desc to artist
       formData.append('image', image);
       formData.append('audio', song);
       formData.append('album', album);
+
+      // Add LRC file if available
+      if (lrcFile) {
+        formData.append('lrc', lrcFile);
+      }
 
       const response = await axios.post(`${url}/api/song/add`, formData);
 
       if (response.data.success) {
         toast.success("Song Added");
         setName("");
-        setDesc("");
+        setArtist(""); // Changed from setDesc to setArtist
         setAlbum("none");
         setImage(false);
         setSong(false);
+        setLrcFile(false);
       } else {
         toast.error("Something went wrong");
       }
@@ -49,7 +56,7 @@ const AddSong = () => {
   const loadAlbumData = async () => {
     try {
       const response = await axios.get(`${url}/api/album/list`);
-    
+
       if (response.data.success) {
         setAlbumData(response.data.albums);
       }
@@ -89,14 +96,25 @@ const AddSong = () => {
             <img src={image instanceof File ? URL.createObjectURL(image) : assets.upload_area} className='w-24 cursor-pointer' alt="" />
           </label>
         </div>
+        <div className='flex flex-col gap-4'>
+          <p>Upload Lyrics (LRC)</p>
+          <input onChange={(e) => setLrcFile(e.target.files[0])} type="file" id='lrc' accept='.lrc' hidden/>
+          <label htmlFor="lrc">
+            <div className={`w-24 h-24 flex items-center justify-center border-2 ${lrcFile ? 'border-green-600 bg-green-100' : 'border-gray-300'} rounded cursor-pointer`}>
+              <span className={`text-sm ${lrcFile ? 'text-green-600' : 'text-gray-500'}`}>
+                {lrcFile ? 'LRC Added' : 'LRC File'}
+              </span>
+            </div>
+          </label>
+        </div>
       </div>
       <div className='flex flex-col gap-2.5'>
         <p>Song name</p>
         <input onChange={(e) => setName(e.target.value)} value={name} className='bg-transparent outline-green-600 border-2 border-gray-400 p-2.5 w-[max(40vw,250vw)]' placeholder='Type Here' type="text" required/>
       </div>
       <div className='flex flex-col gap-2.5'>
-        <p>Song description</p>
-        <input onChange={(e) => setDesc(e.target.value)} value={desc} className='bg-transparent outline-green-600 border-2 border-gray-400 p-2.5 w-[max(40vw,250vw)]' placeholder='Type Here' type="text" required/>
+        <p>Artist</p>
+        <input onChange={(e) => setArtist(e.target.value)} value={artist} className='bg-transparent outline-green-600 border-2 border-gray-400 p-2.5 w-[max(40vw,250vw)]' placeholder='Type Here' type="text" required/>
       </div>
       <div className='flex flex-col gap-2.5'>
         <p>Album</p>

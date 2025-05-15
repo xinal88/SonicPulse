@@ -9,7 +9,7 @@ const DisplayAlbum = ({album}) => {
     const {id} = useParams();
     const [albumData, setAlbumData] = useState("");
     const {playWithId, albumsData, songsData} = useContext(PlayerContext);
-    
+
     useEffect(() => {
         albumsData.map((item) => {
             if (item._id === id) {
@@ -49,7 +49,10 @@ const DisplayAlbum = ({album}) => {
                     <p className='text-white'>
                         <b className='mr-4 text-[#a7a7a7]'>{index + 1}</b>
                         <img className='inline w-10 mr-5' src={item.image} alt="" />
-                        {item.name}
+                        <span className="flex flex-col">
+                            <span>{item.name}</span>
+                            <span className="text-sm text-[#a7a7a7]">{item.artist}</span>
+                        </span>
                     </p>
                     <p className='text-[15px]'>{albumData.name}</p>
                     <p className='text-[15px] hidden sm:block'>5 days ago</p>

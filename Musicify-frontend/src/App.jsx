@@ -1,8 +1,9 @@
+// Musicify-frontend/src/App.jsx
 import React, { useContext } from 'react'
 import Sidebar from './components/Sidebar'
-import Player from './components/Player'
+import Player from './components/Player' //
 import Display from './components/Display'
-import { PlayerContext } from './context/PlayerContext'
+import { PlayerContext } from './context/PlayerContext' //
 
 const App = () => {
 
@@ -22,6 +23,7 @@ const App = () => {
           : null
       }
       
+      {/* The preload='auto' and managing src via context is correct. No loop attribute needed here. */}
       <audio ref={audioRef} src={track ? track.file:""} preload='auto'></audio>
     </div>
   )

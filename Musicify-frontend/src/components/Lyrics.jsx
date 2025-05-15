@@ -1,10 +1,20 @@
-import React, { useContext, useRef, useEffect } from 'react';
+import React, { useContext, useRef, useEffect, useState } from 'react';
 import { PlayerContext } from '../context/PlayerContext';
 
 const Lyrics = () => {
   const { currentLyrics, activeLyricIndex, track } = useContext(PlayerContext);
   const lyricsContainerRef = useRef(null);
   const activeLineRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Set loading state when track changes but lyrics haven't loaded yet
+  useEffect(() => {
+    if (track && track.lrcFile && currentLyrics.length === 0) {
+      setIsLoading(true);
+    } else {
+      setIsLoading(false);
+    }
+  }, [track, currentLyrics.length]);
 
   // Scroll to active lyric when it changes
   useEffect(() => {
@@ -16,6 +26,15 @@ const Lyrics = () => {
       });
     }
   }, [activeLyricIndex]);
+
+  // If loading, show loading indicator
+  if (isLoading) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-gray-400">
+        <p className="text-lg">Loading lyrics...</p>
+      </div>
+    );
+  }
 
   // If no lyrics or no track, show a message
   if (!track || !currentLyrics || currentLyrics.length === 0) {

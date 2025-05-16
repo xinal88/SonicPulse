@@ -28,10 +28,24 @@ const Player = () => {
         changeVolume,
         toggleMuteHandler,
         shuffleMode,
-        toggleShuffleMode
+        toggleShuffleMode,
+        showNowPlaying,
+        setShowNowPlaying,
+        showFullscreen,
+        setShowFullscreen,
+        isFullscreenMode,
+        toggleBrowserFullscreen,
+        showQueue,
+        toggleQueue,
+        registerSeekBar,
+        unregisterSeekBar,
+        registerSeekBg,
+        unregisterSeekBg
     } = useContext(PlayerContext);
 
     const volumeBarBgRef = useRef(null);
+    const localSeekBarRef = useRef(null);
+    const localSeekBgRef = useRef(null);
     const [isDraggingVolume, setIsDraggingVolume] = useState(false);
 
     const calculateVolumeFromEvent = useCallback((event, barRef) => {
@@ -54,6 +68,32 @@ const Player = () => {
         setIsDraggingVolume(true);
         handleVolumeInteraction(event);
     }, [handleVolumeInteraction]);
+
+    // Register the seekbar with the context
+    useEffect(() => {
+        if (localSeekBarRef.current) {
+            registerSeekBar(localSeekBarRef.current);
+        }
+
+        return () => {
+            if (localSeekBarRef.current) {
+                unregisterSeekBar(localSeekBarRef.current);
+            }
+        };
+    }, [registerSeekBar, unregisterSeekBar]);
+
+    // Register the seekBg with the context
+    useEffect(() => {
+        if (localSeekBgRef.current) {
+            registerSeekBg(localSeekBgRef.current);
+        }
+
+        return () => {
+            if (localSeekBgRef.current) {
+                unregisterSeekBg(localSeekBgRef.current);
+            }
+        };
+    }, [registerSeekBg, unregisterSeekBg]);
 
     useEffect(() => {
         const handleMouseMove = (event) => {
@@ -103,12 +143,26 @@ const Player = () => {
                 return { }; // Default style (no filter or specific style for inactive)
         }
     };
-    
+
     const displayVolumePercentage = (isMuted ? 0 : volume) * 100;
 
     // This will apply green color to the shuffle icon when active
     const getShuffleIconStyle = () => {
         return shuffleMode ? { filter: 'invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(90%) contrast(95%)' } : {};
+    };
+
+    // Toggle the Now Playing view
+    const toggleNowPlaying = () => {
+        setShowNowPlaying(prev => !prev);
+    };
+
+    // Toggle the Fullscreen view and browser fullscreen
+    const toggleFullscreen = () => {
+        // Toggle our app's fullscreen view
+        setShowFullscreen(prev => !prev);
+
+        // Toggle browser fullscreen mode
+        toggleBrowserFullscreen();
     };
 
     return track ? (
@@ -117,12 +171,12 @@ const Player = () => {
                 <img className='w-12' src={track.image} alt="" />
                 <div>
                     <p className='truncate w-32 xl:w-48'>{track.name}</p>
-                    <p className='truncate w-32 xl:w-48 text-xs text-gray-400'>{track.artist}</p>
+                    <p className='truncate w-32 xl:w-48 text-xs text-gray-400'>{track.artistName || track.artist}</p>
                 </div>
             </div>
             <div className='flex flex-col items-center gap-1 m-auto'>
                 <div className='flex gap-4'>
-                    <img 
+                    <img
                         onClick={toggleShuffleMode}
                         className='w-4 cursor-pointer'
                         src={assets.shuffle_icon}
@@ -151,8 +205,8 @@ const Player = () => {
                     <img
                         onClick={toggleLoopMode}
                         className='w-4 cursor-pointer'
-                        src={getLoopIcon()} 
-                        style={getLoopIconStyle()} 
+                        src={getLoopIcon()}
+                        style={getLoopIconStyle()}
                         alt="Loop"
                         title={
                             loopMode === LOOP_MODE.NO_LOOP ? "Loop: Off" :
@@ -162,14 +216,14 @@ const Player = () => {
                 </div>
                 <div className='flex items-center gap-5'>
                     <p className='text-xs w-8 text-center'>{time.currentTime.minute}:{time.currentTime.second < 10 ? `0${time.currentTime.second}` : time.currentTime.second}</p>
-                    <div ref={seekBg} onClick={seekSong} className='w-[50vw] md:w-[60vw] max-w-[500px] bg-gray-300 rounded-full cursor-pointer'>
-                        <hr ref={seekBar} className='h-1 border-none w-0 bg-green-800 rounded-full' />
+                    <div ref={localSeekBgRef} onClick={seekSong} className='w-[50vw] md:w-[60vw] max-w-[500px] bg-gray-300 rounded-full cursor-pointer'>
+                        <hr ref={localSeekBarRef} className='h-1 border-none w-0 bg-green-800 rounded-full' />
                     </div>
                     <p className='text-xs w-8 text-center'>{time.totalTime.minute}:{time.totalTime.second < 10 ? `0${time.totalTime.second}` : time.totalTime.second}</p>
                 </div>
             </div>
             <div className='hidden lg:flex items-center gap-3 opacity-75'>
-                <img className='w-4' src={assets.plays_icon} alt="Plays" />
+
                 <div
                     onClick={toggleLyrics}
                     className={`relative cursor-pointer ${currentLyrics && currentLyrics.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -184,10 +238,17 @@ const Player = () => {
                         <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${showLyrics ? 'bg-green-500' : 'bg-white'}`}></div>
                     )}
                 </div>
-                <img className='w-4' src={assets.queue_icon} alt="Queue" />
-                <img 
-                    onClick={toggleMuteHandler} 
-                    className='w-4 cursor-pointer' 
+                <img
+                    onClick={toggleQueue}
+                    className='w-4 cursor-pointer'
+                    src={assets.queue_icon}
+                    alt="Queue"
+                    title={showQueue ? "Hide Queue" : "Show Queue"}
+                    style={showQueue ? { filter: 'invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(90%) contrast(95%)' } : {}}
+                />
+                <img
+                    onClick={toggleMuteHandler}
+                    className='w-4 cursor-pointer'
                     src={isMuted ? (assets.mute_icon) : assets.volume_icon}
                     alt={isMuted ? "Unmute" : "Mute"}
                     title={isMuted ? "Unmute" : "Mute"}
@@ -207,8 +268,22 @@ const Player = () => {
                         style={{ left: `calc(${displayVolumePercentage}% - 6px)` }}
                     />
                 </div>
-                <img className='w-4' src={assets.mini_player_icon} alt="Mini Player" />
-                <img className='w-4' src={assets.zoom_icon} alt="Zoom" />
+                <img
+                    onClick={toggleNowPlaying}
+                    className='w-4 cursor-pointer'
+                    src={assets.plays_icon}
+                    alt="Now Playing"
+                    title={showNowPlaying ? "Hide Now Playing" : "Show Now Playing"}
+                    style={showNowPlaying ? { filter: 'invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(90%) contrast(95%)' } : {}}
+                />
+                <img
+                    onClick={toggleFullscreen}
+                    className='w-4 cursor-pointer'
+                    src={assets.zoom_icon}
+                    alt="Fullscreen"
+                    title={showFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    style={showFullscreen ? { filter: 'invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(90%) contrast(95%)' } : {}}
+                />
             </div>
         </div>
     ) : null;

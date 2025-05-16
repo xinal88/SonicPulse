@@ -24,6 +24,18 @@ const Sidebar = () => {
                 <img src={assets.album_icon} className='w-5' alt="" />
                 <p className='hidden sm:block'>List Album</p>
             </NavLink>
+            <NavLink to='/add-artist' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
+                <img src={assets.add_artist} className='w-5' alt="" />
+                <p className='hidden sm:block'>Add Artist</p>
+            </NavLink>
+            <NavLink to='/list-artist' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
+                <img src={assets.artist_icon} className='w-5' alt="" />
+                <p className='hidden sm:block'>List Artist</p>
+            </NavLink>
+            <NavLink to='/list-genre' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
+                <img src={assets.genre_icon} className='w-5' alt="" />
+                <p className='hidden sm:block'>List Genre</p>
+            </NavLink>
         </div>
     </div>
   )

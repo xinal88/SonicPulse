@@ -10,17 +10,46 @@ const DisplayAlbum = ({album}) => {
     const [albumData, setAlbumData] = useState("");
     const {playWithId, albumsData, songsData} = useContext(PlayerContext);
 
+    // Function to calculate total duration of all songs in the album
+    const calculateTotalDuration = (songs) => {
+        if (!songs || songs.length === 0) return "0 min";
+
+        let totalMinutes = 0;
+        let totalSeconds = 0;
+
+        songs.forEach(song => {
+            // Parse duration in format "mm:ss"
+            const [minutes, seconds] = song.duration.split(':').map(Number);
+            totalMinutes += minutes;
+            totalSeconds += seconds;
+        });
+
+        // Convert excess seconds to minutes
+        totalMinutes += Math.floor(totalSeconds / 60);
+        totalSeconds = totalSeconds % 60;
+
+        // Format the total duration
+        const hours = Math.floor(totalMinutes / 60);
+        const remainingMinutes = totalMinutes % 60;
+
+        if (hours > 0) {
+            return `about ${hours} hr ${remainingMinutes > 0 ? remainingMinutes + ' min' : ''}`;
+        } else {
+            return `about ${remainingMinutes} min`;
+        }
+    };
+
     useEffect(() => {
         albumsData.map((item) => {
             if (item._id === id) {
                 setAlbumData(item);
             }
         })
-    },[])
+    },[albumsData, id])
 
   return albumData ? (
     <>
-        <Navbar />
+        <Navbar showNavigation={false} />
         <div className='mt-10 flex gap-8 flex-col md:flex-row md:items-end'>
             <img className='w-48 rounded' src={albumData.image} alt="" />
             <div className='flex flex-col'>
@@ -31,8 +60,8 @@ const DisplayAlbum = ({album}) => {
                     <img className='inline-block w-5' src={assets.spotify_logo} alt="" />
                     <b>Spotify</b>
                     • 1,323,154 likes
-                    • <b>50 songs,</b>
-                    about 2 hr 30 min
+                    • <b>{songsData.filter((item) => item.album === albumData.name).length} songs,</b>
+                    {calculateTotalDuration(songsData.filter((item) => item.album === albumData.name))}
                 </p>
             </div>
         </div>
@@ -44,14 +73,14 @@ const DisplayAlbum = ({album}) => {
         </div>
         <hr />
         {
-            songsData.filter((item) => item.album === album.name).map((item, index)=>(
+            songsData.filter((item) => item.album === albumData.name).map((item, index)=>(
                 <div onClick={()=>playWithId(item._id)} key={index} className='grid grid-cols-3 sm:grid-cols-4 gap-2 p-2 items-center text-[#a7a7a7] hover:bg-[#ffffff2b] cursor-pointer'>
-                    <p className='text-white'>
+                    <p className='text-white flex items-center'>
                         <b className='mr-4 text-[#a7a7a7]'>{index + 1}</b>
-                        <img className='inline w-10 mr-5' src={item.image} alt="" />
+                        <img className='w-10 mr-5' src={item.image} alt="" />
                         <span className="flex flex-col">
                             <span>{item.name}</span>
-                            <span className="text-sm text-[#a7a7a7]">{item.artist}</span>
+                            <span className="text-sm text-[#a7a7a7]">{item.artistName || item.artist}</span>
                         </span>
                     </p>
                     <p className='text-[15px]'>{albumData.name}</p>

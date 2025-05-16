@@ -9,6 +9,7 @@ import album_icon from './album_icon.png'
 import upload_song from './upload_song.png'
 import add_artist from './add_artist.svg' // New artist-specific icon
 import artist_icon from './artist_icon.svg' // New artist-specific icon
+import genre_icon from './genre_icon.svg' // Genre icon
 
 export const assets ={
     logo,
@@ -21,6 +22,7 @@ export const assets ={
     album_icon,
     upload_song,
     add_artist,
-    artist_icon
+    artist_icon,
+    genre_icon
 }
 

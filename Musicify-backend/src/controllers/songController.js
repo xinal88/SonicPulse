@@ -1,8 +1,10 @@
 import {v2 as cloudinary} from 'cloudinary'
+import mongoose from 'mongoose';
 import songModel from '../models/songModel.js';
 import artistModel from '../models/artistModel.js';
 import albumModel from '../models/albumModel.js';
 import genreModel from '../models/genreModel.js';
+import { normalizeGenreName } from '../controllers/genreController.js';
 
 const addSong = async (req, res) => {
     try {
@@ -48,10 +50,24 @@ const addSong = async (req, res) => {
                 : [req.body.newGenres];
 
             for (const genreName of newGenreNames) {
-                // Check if genre already exists
-                const existingGenre = await genreModel.findOne({
-                    name: { $regex: new RegExp(`^${genreName}$`, 'i') }
-                });
+                if (!genreName || genreName.trim() === '') {
+                    continue; // Skip empty genre names
+                }
+
+                // Normalize the genre name for comparison
+                const normalizedName = normalizeGenreName(genreName);
+
+                if (normalizedName === '') {
+                    continue; // Skip if normalization results in empty string
+                }
+
+                // Get all genres and check if any normalized name matches
+                const allGenres = await genreModel.find();
+
+                // Find a matching genre by normalized name
+                const existingGenre = allGenres.find(genre =>
+                    normalizeGenreName(genre.name) === normalizedName
+                );
 
                 if (existingGenre) {
                     // If it exists, add its ID to the genres array if not already there
@@ -59,8 +75,8 @@ const addSong = async (req, res) => {
                         genres.push(existingGenre._id.toString());
                     }
                 } else {
-                    // Create new genre
-                    const newGenre = new genreModel({ name: genreName });
+                    // Create new genre with the original name (trimmed)
+                    const newGenre = new genreModel({ name: genreName.trim() });
                     await newGenre.save();
                     genres.push(newGenre._id.toString());
                 }
@@ -157,33 +173,66 @@ const addSong = async (req, res) => {
             genres // Add genres array
         }
 
-        const song = songModel(songData);
-        await song.save();
+        // Start a session for transaction
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-        // Update genres for all artists
-        if (genres.length > 0 && artistIds.length > 0) {
-            try {
+        try {
+            // Save the song within the transaction
+            const song = new songModel(songData);
+            const savedSong = await song.save({ session });
+
+            // Update genres for all artists and update genre songList and songCount
+            if (genres.length > 0) {
+                // Update each genre's songList and songCount
+                const genreUpdatePromises = genres.map(genreId =>
+                    genreModel.findByIdAndUpdate(
+                        genreId,
+                        {
+                            $addToSet: { songList: savedSong._id },
+                            $inc: { songCount: 1 }
+                        },
+                        { session, new: true }
+                    )
+                );
+
+                await Promise.all(genreUpdatePromises);
+
                 // Update each artist's genres
-                for (const artistId of artistIds) {
-                    const artist = await artistModel.findById(artistId);
-                    if (artist) {
-                        // Create a set of unique genre IDs
-                        const uniqueGenres = new Set([
-                            ...(artist.genres || []).map(g => g.toString()),
-                            ...genres
-                        ]);
+                if (artistIds.length > 0) {
+                    const artistUpdatePromises = artistIds.map(async artistId => {
+                        const artist = await artistModel.findById(artistId).session(session);
+                        if (artist) {
+                            // Create a set of unique genre IDs
+                            const uniqueGenres = new Set([
+                                ...(artist.genres || []).map(g => g.toString()),
+                                ...genres
+                            ]);
 
-                        // Update artist with unique genres
-                        await artistModel.findByIdAndUpdate(
-                            artistId,
-                            { genres: Array.from(uniqueGenres) }
-                        );
-                    }
+                            return artistModel.findByIdAndUpdate(
+                                artistId,
+                                { genres: Array.from(uniqueGenres) },
+                                { session, new: true }
+                            );
+                        }
+                    });
+
+                    await Promise.all(artistUpdatePromises.filter(p => p)); // Filter out undefined promises
                 }
-            } catch (error) {
-                console.error("Error updating artist genres:", error);
-                // Continue even if updating artist genres fails
             }
+
+            // Commit the transaction
+            await session.commitTransaction();
+            session.endSession();
+
+            console.log(`Song "${savedSong.name}" added successfully with ${genres.length} genres`);
+
+        } catch (error) {
+            // Abort transaction on error
+            await session.abortTransaction();
+            session.endSession();
+            console.error("Transaction aborted:", error);
+            throw error; // Re-throw to be caught by the outer try-catch
         }
 
         res.json({success:true, message:"Song Added"})
@@ -195,8 +244,23 @@ const addSong = async (req, res) => {
 
 const listSong = async (req, res) => {
     try {
-        // Find all songs and populate the genres field
-        const allSongs = await songModel.find({});
+        const { search } = req.query;
+        let query = {};
+
+        // If search parameter is provided, search by song name, album name, or artist name
+        if (search) {
+            // Create a query that searches across multiple fields
+            query = {
+                $or: [
+                    { name: { $regex: search, $options: 'i' } },         // Search by song name
+                    { album: { $regex: search, $options: 'i' } },        // Search by album name
+                    { artistName: { $regex: search, $options: 'i' } }    // Search by artist name
+                ]
+            };
+        }
+
+        // Find songs based on the query
+        const allSongs = await songModel.find(query);
 
         // Log the number of songs and whether they have genres
         console.log(`Found ${allSongs.length} songs`);
@@ -214,12 +278,91 @@ const listSong = async (req, res) => {
 
 const removeSong = async (req, res) => {
     try {
-        console.log(req.body.id)
-        await songModel.findByIdAndDelete(req.body.id);
-        res.json({success:true, message:"Song removed"});
+        const songId = req.body.id;
+        console.log("Removing song with ID:", songId);
+
+        // Get the song's genres and artist info before deleting
+        const song = await songModel.findById(songId);
+        if (!song) {
+            return res.json({success: false, message: "Song not found"});
+        }
+
+        const genreIds = song.genres.map(g => g.toString());
+        const artistIds = Array.isArray(song.artist) ? song.artist.map(a => a.toString()) : [];
+
+        // Start a session for transaction
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Delete the song within the transaction
+            await songModel.findByIdAndDelete(songId).session(session);
+
+            // Update genre collections
+            if (genreIds.length > 0) {
+                // Remove song from all its genres
+                const genreUpdatePromises = genreIds.map(genreId =>
+                    genreModel.findByIdAndUpdate(
+                        genreId,
+                        {
+                            $pull: { songList: songId },
+                            $inc: { songCount: -1 }
+                        },
+                        { session, new: true }
+                    )
+                );
+
+                await Promise.all(genreUpdatePromises);
+                console.log(`Removed song from ${genreIds.length} genres`);
+            }
+
+            // Update artist genre lists if needed
+            // This is more complex as we need to check if any other songs by this artist
+            // still have these genres
+            if (artistIds.length > 0 && genreIds.length > 0) {
+                for (const artistId of artistIds) {
+                    // For each artist, get all their songs except the one being deleted
+                    const artistSongs = await songModel.find({
+                        artist: artistId,
+                        _id: { $ne: songId }
+                    }).session(session);
+
+                    // Collect all genres used by the artist's remaining songs
+                    const remainingGenres = new Set();
+                    artistSongs.forEach(song => {
+                        if (song.genres && song.genres.length > 0) {
+                            song.genres.forEach(genreId => {
+                                remainingGenres.add(genreId.toString());
+                            });
+                        }
+                    });
+
+                    // Update the artist's genres to only include those still in use
+                    await artistModel.findByIdAndUpdate(
+                        artistId,
+                        { genres: Array.from(remainingGenres) },
+                        { session, new: true }
+                    );
+                }
+            }
+
+            // Commit the transaction
+            await session.commitTransaction();
+            session.endSession();
+
+            console.log(`Song "${song.name}" removed successfully`);
+            res.json({success: true, message: "Song removed"});
+
+        } catch (error) {
+            // Abort transaction on error
+            await session.abortTransaction();
+            session.endSession();
+            console.error("Transaction aborted:", error);
+            res.json({success: false, message: "Error removing song"});
+        }
     } catch (error) {
-        console.log(error)
-        res.json({success:false});
+        console.error("Error in removeSong:", error);
+        res.json({success: false, message: "Error removing song"});
     }
 }
 
@@ -268,10 +411,24 @@ const updateSong = async (req, res) => {
                 : [req.body.newGenres];
 
             for (const genreName of newGenreNames) {
-                // Check if genre already exists
-                const existingGenre = await genreModel.findOne({
-                    name: { $regex: new RegExp(`^${genreName}$`, 'i') }
-                });
+                if (!genreName || genreName.trim() === '') {
+                    continue; // Skip empty genre names
+                }
+
+                // Normalize the genre name for comparison
+                const normalizedName = normalizeGenreName(genreName);
+
+                if (normalizedName === '') {
+                    continue; // Skip if normalization results in empty string
+                }
+
+                // Get all genres and check if any normalized name matches
+                const allGenres = await genreModel.find();
+
+                // Find a matching genre by normalized name
+                const existingGenre = allGenres.find(genre =>
+                    normalizeGenreName(genre.name) === normalizedName
+                );
 
                 if (existingGenre) {
                     // If it exists, add its ID to the genres array if not already there
@@ -279,8 +436,8 @@ const updateSong = async (req, res) => {
                         genres.push(existingGenre._id.toString());
                     }
                 } else {
-                    // Create new genre
-                    const newGenre = new genreModel({ name: genreName });
+                    // Create new genre with the original name (trimmed)
+                    const newGenre = new genreModel({ name: genreName.trim() });
                     await newGenre.save();
                     genres.push(newGenre._id.toString());
                 }
@@ -367,15 +524,103 @@ const updateSong = async (req, res) => {
             genresCount: updateData.genres.length
         });
 
-        // Update the song in the database
-        await songModel.findByIdAndUpdate(id, updateData);
+        // Get the song's current genres and artists before updating
+        const currentSong = await songModel.findById(id);
+        if (!currentSong) {
+            return res.json({success: false, message: "Song not found"});
+        }
 
-        // Update genres for all artists if genres were provided
-        if (genres.length > 0 && artistIds.length > 0) {
-            try {
-                // Update each artist's genres
-                for (const artistId of artistIds) {
-                    const artist = await artistModel.findById(artistId);
+        const oldGenres = currentSong.genres.map(g => g.toString());
+        const oldArtistIds = Array.isArray(currentSong.artist) ? currentSong.artist.map(a => a.toString()) : [];
+
+        // Start a session for transaction
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Update the song in the database within the transaction
+            await songModel.findByIdAndUpdate(id, updateData, { session });
+
+            // Handle genre updates
+            // Find genres that were removed
+            const removedGenres = oldGenres.filter(g => !genres.includes(g));
+
+            // Find genres that were added
+            const addedGenres = genres.filter(g => !oldGenres.includes(g));
+
+            // Process removed genres
+            if (removedGenres.length > 0) {
+                const removeGenrePromises = removedGenres.map(genreId =>
+                    genreModel.findByIdAndUpdate(
+                        genreId,
+                        {
+                            $pull: { songList: id },
+                            $inc: { songCount: -1 }
+                        },
+                        { session, new: true }
+                    )
+                );
+
+                await Promise.all(removeGenrePromises);
+                console.log(`Removed song from ${removedGenres.length} genres`);
+            }
+
+            // Process added genres
+            if (addedGenres.length > 0) {
+                const addGenrePromises = addedGenres.map(genreId =>
+                    genreModel.findByIdAndUpdate(
+                        genreId,
+                        {
+                            $addToSet: { songList: id },
+                            $inc: { songCount: 1 }
+                        },
+                        { session, new: true }
+                    )
+                );
+
+                await Promise.all(addGenrePromises);
+                console.log(`Added song to ${addedGenres.length} genres`);
+            }
+
+            // Handle artist updates
+            // Find artists that were removed
+            const removedArtists = oldArtistIds.filter(a => !artistIds.includes(a));
+
+            // Find artists that were added
+            const addedArtists = artistIds.filter(a => !oldArtistIds.includes(a));
+
+            // Update removed artists' genres
+            if (removedArtists.length > 0) {
+                for (const artistId of removedArtists) {
+                    // For each artist, get all their songs except the one being updated
+                    const artistSongs = await songModel.find({
+                        artist: artistId,
+                        _id: { $ne: id }
+                    }).session(session);
+
+                    // Collect all genres used by the artist's remaining songs
+                    const remainingGenres = new Set();
+                    artistSongs.forEach(song => {
+                        if (song.genres && song.genres.length > 0) {
+                            song.genres.forEach(genreId => {
+                                remainingGenres.add(genreId.toString());
+                            });
+                        }
+                    });
+
+                    // Update the artist's genres to only include those still in use
+                    await artistModel.findByIdAndUpdate(
+                        artistId,
+                        { genres: Array.from(remainingGenres) },
+                        { session, new: true }
+                    );
+                }
+            }
+
+            // Update added artists' genres
+            if (addedArtists.length > 0) {
+                for (const artistId of addedArtists) {
+                    const artist = await artistModel.findById(artistId).session(session);
                     if (artist) {
                         // Create a set of unique genre IDs
                         const uniqueGenres = new Set([
@@ -386,14 +631,25 @@ const updateSong = async (req, res) => {
                         // Update artist with unique genres
                         await artistModel.findByIdAndUpdate(
                             artistId,
-                            { genres: Array.from(uniqueGenres) }
+                            { genres: Array.from(uniqueGenres) },
+                            { session, new: true }
                         );
                     }
                 }
-            } catch (error) {
-                console.error("Error updating artist genres:", error);
-                // Continue even if updating artist genres fails
             }
+
+            // Commit the transaction
+            await session.commitTransaction();
+            session.endSession();
+
+            console.log(`Song "${updateData.name}" updated successfully`);
+
+        } catch (error) {
+            // Abort transaction on error
+            await session.abortTransaction();
+            session.endSession();
+            console.error("Transaction aborted:", error);
+            throw error; // Re-throw to be caught by the outer try-catch
         }
 
         res.json({success: true, message: "Song updated"});

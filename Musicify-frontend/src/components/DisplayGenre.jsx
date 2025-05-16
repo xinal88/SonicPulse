@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import axios from 'axios';
 import Navbar from './Navbar';
 import { PlayerContext } from '../context/PlayerContext';
 import { assets } from '../assets/frontend-assets/assets';
@@ -7,6 +8,7 @@ import { assets } from '../assets/frontend-assets/assets';
 const DisplayGenre = () => {
   const { genreId } = useParams();
   const { playWithId, songsData, genresData, artistsData } = useContext(PlayerContext);
+  const url = 'http://localhost:4000';
   const [genreSongs, setGenreSongs] = useState([]);
   const [genre, setGenre] = useState(null);
   const [songsByArtist, setSongsByArtist] = useState({});
@@ -21,55 +23,127 @@ const DisplayGenre = () => {
     }
   }, [genresData, genreId]);
 
-  // Filter songs by genre and display all songs grouped by artist
+  // Fetch songs for this genre and group them by artist
   useEffect(() => {
-    if (songsData.length > 0 && genre) {
-      // Find songs with this genre
-      const songs = songsData.filter(song => {
-        if (!song.genres) return false;
+    const fetchGenreSongs = async () => {
+      if (genre) {
+        try {
+          // Fetch the genre with its songList populated
+          const response = await axios.get(`${url}/api/genre/list`, {
+            params: {
+              includeSongs: 'true',
+              id: genreId
+            }
+          });
 
-        // Check if the genre ID is in the song's genres array
-        return song.genres.some(g => {
-          // Handle both string and object IDs
-          if (typeof g === 'string') {
-            return g === genreId;
-          } else if (g && typeof g === 'object') {
-            return g.toString() === genreId.toString();
+          if (response.data.success) {
+            const genres = response.data.genres;
+            const currentGenre = genres.find(g => g._id === genreId);
+
+            if (currentGenre && currentGenre.songList) {
+              // If songList is populated, use it directly
+              if (Array.isArray(currentGenre.songList) && currentGenre.songList.length > 0 &&
+                  typeof currentGenre.songList[0] === 'object') {
+                setGenreSongs(currentGenre.songList);
+
+                // Group songs by artist
+                const byArtist = {};
+
+                currentGenre.songList.forEach(song => {
+                  // Get the first artist ID from the song
+                  let artistId;
+
+                  if (Array.isArray(song.artist) && song.artist.length > 0) {
+                    // If artist is an array, use the first artist
+                    artistId = song.artist[0];
+                  } else if (typeof song.artist === 'string' || typeof song.artist === 'object') {
+                    // If artist is a string or object (ObjectId), use it directly
+                    artistId = song.artist;
+                  }
+
+                  if (artistId) {
+                    if (!byArtist[artistId]) {
+                      byArtist[artistId] = [];
+                    }
+
+                    // Add song to the artist's list
+                    byArtist[artistId].push(song);
+                  }
+                });
+
+                setSongsByArtist(byArtist);
+              } else {
+                // Fallback to filtering songsData if songList is not populated
+                fallbackToClientSideFiltering();
+              }
+            } else {
+              // Fallback to filtering songsData if genre not found
+              fallbackToClientSideFiltering();
+            }
+          } else {
+            // Fallback to filtering songsData if API call fails
+            fallbackToClientSideFiltering();
           }
-          return false;
+        } catch (error) {
+          console.error("Error fetching genre songs:", error);
+          // Fallback to filtering songsData if API call fails
+          fallbackToClientSideFiltering();
+        }
+      }
+    };
+
+    // Fallback function that uses client-side filtering (original implementation)
+    const fallbackToClientSideFiltering = () => {
+      if (songsData.length > 0 && genre) {
+        // Find songs with this genre
+        const songs = songsData.filter(song => {
+          if (!song.genres) return false;
+
+          // Check if the genre ID is in the song's genres array
+          return song.genres.some(g => {
+            // Handle both string and object IDs
+            if (typeof g === 'string') {
+              return g === genreId;
+            } else if (g && typeof g === 'object') {
+              return g.toString() === genreId.toString();
+            }
+            return false;
+          });
         });
-      });
 
-      setGenreSongs(songs);
+        setGenreSongs(songs);
 
-      // Group all songs by artist (using only the first artist in the list for grouping)
-      const byArtist = {};
+        // Group all songs by artist (using only the first artist in the list for grouping)
+        const byArtist = {};
 
-      songs.forEach(song => {
-        // Get the first artist ID from the song
-        let artistId;
+        songs.forEach(song => {
+          // Get the first artist ID from the song
+          let artistId;
 
-        if (Array.isArray(song.artist) && song.artist.length > 0) {
-          // If artist is an array, use the first artist
-          artistId = song.artist[0];
-        } else if (typeof song.artist === 'string' || typeof song.artist === 'object') {
-          // If artist is a string or object (ObjectId), use it directly
-          artistId = song.artist;
-        }
-
-        if (artistId) {
-          if (!byArtist[artistId]) {
-            byArtist[artistId] = [];
+          if (Array.isArray(song.artist) && song.artist.length > 0) {
+            // If artist is an array, use the first artist
+            artistId = song.artist[0];
+          } else if (typeof song.artist === 'string' || typeof song.artist === 'object') {
+            // If artist is a string or object (ObjectId), use it directly
+            artistId = song.artist;
           }
 
-          // Add all songs to the artist (no limit)
-          byArtist[artistId].push(song);
-        }
-      });
+          if (artistId) {
+            if (!byArtist[artistId]) {
+              byArtist[artistId] = [];
+            }
 
-      setSongsByArtist(byArtist);
-    }
-  }, [songsData, genre, genreId]);
+            // Add all songs to the artist (no limit)
+            byArtist[artistId].push(song);
+          }
+        });
+
+        setSongsByArtist(byArtist);
+      }
+    };
+
+    fetchGenreSongs();
+  }, [genre, genreId, songsData, url]);
 
   // Calculate total duration of songs
   const calculateTotalDuration = (songs) => {

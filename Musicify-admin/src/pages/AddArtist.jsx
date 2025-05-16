@@ -24,12 +24,19 @@ const AddArtist = () => {
       const response = await axios.post(`${url}/api/artist/add`, formData);
 
       if (response.data.success) {
-        toast.success("Artist Added")
+        toast.success("Artist Added Successfully");
         setName("");
         setImage(false);
         setColor('#121212');
       } else {
-        toast.error("Something went wrong");
+        // Check for specific error messages
+        if (response.data.isDuplicate) {
+          toast.error("An artist with this name already exists");
+        } else if (response.data.message) {
+          toast.error(response.data.message);
+        } else {
+          toast.error("Something went wrong");
+        }
       }
     } catch (error) {
       console.log(error);

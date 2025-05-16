@@ -11,6 +11,7 @@ import EditSong from './pages/EditSong';
 import AddArtist from './pages/AddArtist';
 import ListArtist from './pages/ListArtist';
 import EditArtist from './pages/EditArtist';
+import ListGenre from './pages/ListGenre';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 
@@ -31,6 +32,7 @@ const App = () => {
               <Route path='/list-song' element={<ListSong/>} />
               <Route path='/list-album' element={<ListAlbum/>} />
               <Route path='/list-artist' element={<ListArtist/>} />
+              <Route path='/list-genre' element={<ListGenre/>} />
               <Route path='/edit-album/:id' element={<EditAlbum/>} />
               <Route path='/edit-song/:id' element={<EditSong/>} />
               <Route path='/edit-artist/:id' element={<EditArtist/>} />

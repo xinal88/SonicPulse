@@ -88,10 +88,17 @@ const EditArtist = () => {
       const response = await axios.post(`${url}/api/artist/update`, formData);
 
       if (response.data.success) {
-        toast.success("Artist Updated");
+        toast.success("Artist Updated Successfully");
         navigate('/list-artist');
       } else {
-        toast.error("Something went wrong");
+        // Check for specific error messages
+        if (response.data.isDuplicate) {
+          toast.error("An artist with this name already exists");
+        } else if (response.data.message) {
+          toast.error(response.data.message);
+        } else {
+          toast.error("Something went wrong");
+        }
       }
     } catch (error) {
       console.error("Error updating artist:", error);

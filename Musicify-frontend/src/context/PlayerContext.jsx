@@ -102,7 +102,7 @@ const PlayerContextProvider = (props) => {
     }, [volume, previousVolume, setIsMuted, setVolume]);
 
 
-    // Fetch initial data on mount
+    // Fetch songs data
     useEffect(() => {
         const getSongs = async () => {
             try {
@@ -122,6 +122,11 @@ const PlayerContextProvider = (props) => {
             }
         };
 
+        getSongs();
+    }, [url]);
+
+    // Fetch albums and artists data
+    useEffect(() => {
         const getAlbums = async () => {
             try {
                 const response = await axios.get(`${url}/api/album/list`);
@@ -144,18 +149,38 @@ const PlayerContextProvider = (props) => {
             }
         };
 
+        getAlbums();
+        getArtists();
+    }, [url]);
+
+    // Fetch genres data and select random genres with songs
+    useEffect(() => {
         const getGenres = async () => {
             try {
-                const response = await axios.get(`${url}/api/genre/list`);
+                // Request genres with song counts
+                const response = await axios.get(`${url}/api/genre/list`, {
+                    params: { includeCounts: 'true' }
+                });
+
                 if (response.data.success) {
                     const genres = response.data.genres;
                     setGenresData(genres);
 
-                    // Select 3 random genres when genres are first loaded
-                    if (genres.length > 0 && randomGenres.length === 0) {
-                        // Shuffle the genres array and take the first 3
-                        const shuffled = [...genres].sort(() => 0.5 - Math.random());
-                        setRandomGenres(shuffled.slice(0, 3));
+                    // Filter genres to only include those that have at least one song
+                    const genresWithSongs = genres.filter(genre => genre.songCount > 0);
+
+                    console.log(`Found ${genresWithSongs.length} genres with songs out of ${genres.length} total genres`);
+
+                    if (genresWithSongs.length > 0) {
+                        // Shuffle the filtered genres array and take up to 3
+                        const shuffled = [...genresWithSongs].sort(() => 0.5 - Math.random());
+                        const selectedGenres = shuffled.slice(0, Math.min(3, genresWithSongs.length));
+                        setRandomGenres(selectedGenres);
+                        console.log('Selected random genres:', selectedGenres.map(g => g.name));
+                    } else {
+                        // If no genres have songs, set empty array
+                        setRandomGenres([]);
+                        console.log('No genres with songs found');
                     }
                 }
             } catch (error) {
@@ -163,11 +188,8 @@ const PlayerContextProvider = (props) => {
             }
         };
 
-        getSongs();
-        getAlbums();
-        getArtists();
         getGenres();
-    }, [/*track, url*/]); // Consider dependencies carefully if you auto-set track
+    }, [url]); // No longer dependent on songsData
 
     // Effect to handle track changes
     useEffect(() => {

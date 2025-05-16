@@ -3,6 +3,7 @@ import { assets } from '../assets/admin-assets/assets'
 import axios from 'axios';
 import { url } from '../App';
 import { toast } from 'react-toastify';
+import { isDuplicateGenre } from '../utils/genreUtils';
 
 
 const AddSong = () => {
@@ -177,12 +178,30 @@ const AddSong = () => {
     setSelectedGenres(selectedGenres.filter(id => id !== genreId));
   }
 
-  // Add a new genre
+  // Add a new genre with validation
   const addNewGenre = () => {
-    if (newGenre.trim() && !newGenres.includes(newGenre.trim())) {
-      setNewGenres([...newGenres, newGenre.trim()]);
-      setNewGenre("");
+    const trimmedGenre = newGenre.trim();
+
+    if (!trimmedGenre) {
+      return; // Don't add empty genres
     }
+
+    // Check for duplicates using our utility function
+    const duplicateCheck = isDuplicateGenre(trimmedGenre, genreData, newGenres);
+
+    if (duplicateCheck.isDuplicate) {
+      // Show appropriate error message based on where the duplicate was found
+      if (duplicateCheck.isExisting) {
+        toast.error(`Genre "${duplicateCheck.duplicateName}" already exists in the system`);
+      } else {
+        toast.error(`You've already added "${duplicateCheck.duplicateName}" to the new genres list`);
+      }
+      return;
+    }
+
+    // No duplicates found, add the new genre
+    setNewGenres([...newGenres, trimmedGenre]);
+    setNewGenre("");
   }
 
   // Remove a new genre

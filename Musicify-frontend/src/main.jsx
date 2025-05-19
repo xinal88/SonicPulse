@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.jsx'
 import { BrowserRouter } from 'react-router-dom'
 import PlayerContextProvider from './context/PlayerContext.jsx'
+import AuthSync from './components/AuthSync'
 
 import { ClerkProvider } from '@clerk/clerk-react'
 
@@ -18,6 +19,7 @@ createRoot(document.getElementById('root')).render(
     <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl='/'>
       <BrowserRouter>
         <PlayerContextProvider>
+          <AuthSync />
           <App />
         </PlayerContextProvider>
       </BrowserRouter>

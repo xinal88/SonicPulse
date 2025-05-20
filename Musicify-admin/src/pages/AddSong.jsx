@@ -4,24 +4,55 @@ import axios from 'axios';
 import { url } from '../App';
 import { toast } from 'react-toastify';
 import { isDuplicateGenre } from '../utils/genreUtils';
-
+import { FaYoutube } from 'react-icons/fa';
 
 const AddSong = () => {
+  // Initialize state from localStorage if available
+  const [image, setImage] = useState(false);
+  const [song, setSong] = useState(false);
+  const [lrcFile, setLrcFile] = useState(false);
+  const [name, setName] = useState(localStorage.getItem('addSong_name') || "");
+  const [selectedArtists, setSelectedArtists] = useState(
+    JSON.parse(localStorage.getItem('addSong_selectedArtists') || '[]')
+  );
+  const [album, setAlbum] = useState(localStorage.getItem('addSong_album') || "none");
+  const [loading, setLoading] = useState(false);
+  const [albumData, setAlbumData] = useState([]);
+  const [artistData, setArtistData] = useState([]);
+  const [genreData, setGenreData] = useState([]);
+  const [selectedGenres, setSelectedGenres] = useState(
+    JSON.parse(localStorage.getItem('addSong_selectedGenres') || '[]')
+  );
+  const [newGenre, setNewGenre] = useState("");
+  const [newGenres, setNewGenres] = useState(
+    JSON.parse(localStorage.getItem('addSong_newGenres') || '[]')
+  );
+  const [useAlbumImage, setUseAlbumImage] = useState(
+    localStorage.getItem('addSong_useAlbumImage') === 'true'
+  );
+  const [youtubeUrl, setYoutubeUrl] = useState(localStorage.getItem('addSong_youtubeUrl') || "");
 
-  const [image,setImage] = useState(false);
-  const [song,setSong] = useState(false);
-  const [lrcFile,setLrcFile] = useState(false);
-  const [name,setName] = useState("");
-  const [selectedArtists,setSelectedArtists] = useState([]); // Array of selected artist IDs
-  const [album,setAlbum] = useState("none");
-  const [useAlbumImage,setUseAlbumImage] = useState(false);
-  const [loading,setLoading] = useState(false);
-  const [albumData,setAlbumData] = useState([]);
-  const [artistData,setArtistData] = useState([]);
-  const [genreData,setGenreData] = useState([]);
-  const [selectedGenres,setSelectedGenres] = useState([]);
-  const [newGenre,setNewGenre] = useState("");
-  const [newGenres,setNewGenres] = useState([]);
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('addSong_name', name);
+    localStorage.setItem('addSong_selectedArtists', JSON.stringify(selectedArtists));
+    localStorage.setItem('addSong_album', album);
+    localStorage.setItem('addSong_selectedGenres', JSON.stringify(selectedGenres));
+    localStorage.setItem('addSong_newGenres', JSON.stringify(newGenres));
+    localStorage.setItem('addSong_useAlbumImage', useAlbumImage.toString());
+    localStorage.setItem('addSong_youtubeUrl', youtubeUrl);
+  }, [name, selectedArtists, album, selectedGenres, newGenres, useAlbumImage, youtubeUrl]);
+
+  // Clear localStorage after successful submission
+  const clearStoredFormData = () => {
+    localStorage.removeItem('addSong_name');
+    localStorage.removeItem('addSong_selectedArtists');
+    localStorage.removeItem('addSong_album');
+    localStorage.removeItem('addSong_selectedGenres');
+    localStorage.removeItem('addSong_newGenres');
+    localStorage.removeItem('addSong_useAlbumImage');
+    localStorage.removeItem('addSong_youtubeUrl');
+  };
 
   const onSubmitHandler = async (e) => {
     e.preventDefault();
@@ -46,6 +77,46 @@ const AddSong = () => {
 
     setLoading(true);
     try {
+      // If YouTube URL is provided, fetch details first
+      if (youtubeUrl) {
+        try {
+          toast.info("Fetching details from YouTube...");
+          console.log("Sending YouTube URL:", youtubeUrl);
+          
+          const ytResponse = await axios.post(`${url}/api/song/download`, { youtubeUrl });
+          console.log("YouTube response:", ytResponse.data);
+          
+          if (ytResponse.data.success) {
+            // If no name is provided, use the one from YouTube
+            if (!name && ytResponse.data.title && ytResponse.data.title !== "Unknown Title") {
+              setName(ytResponse.data.title);
+            }
+            
+            // If no artists are selected and YouTube provides an artist, try to match
+            if (selectedArtists.length === 0 && 
+                ytResponse.data.artist && 
+                ytResponse.data.artist !== "Unknown Artist") {
+              const artistName = ytResponse.data.artist;
+              const existingArtist = artistData.find(
+                a => a.name.toLowerCase() === artistName.toLowerCase()
+              );
+              
+              if (existingArtist) {
+                setSelectedArtists([existingArtist._id]);
+              }
+            }
+            
+            toast.success("YouTube details fetched successfully");
+          } else {
+            toast.warning("YouTube details could not be fetched completely. Continuing with upload.");
+          }
+        } catch (error) {
+          console.error("Error fetching from YouTube:", error);
+          toast.error("Failed to fetch details from YouTube. Continuing with upload.");
+          // Continue with song upload even if YouTube fetch fails
+        }
+      }
+
       const formData = new FormData();
       formData.append('name', name);
 
@@ -83,12 +154,18 @@ const AddSong = () => {
         formData.append('newGenres', genre);
       });
 
+      // Add YouTube URL if provided
+      if (youtubeUrl) {
+        formData.append('youtubeUrl', youtubeUrl);
+        formData.append('generateFingerprint', 'true');
+      }
+
       const response = await axios.post(`${url}/api/song/add`, formData);
 
       if (response.data.success) {
         toast.success("Song Added");
         setName("");
-        setSelectedArtists([]); // Reset selected artists
+        setSelectedArtists([]);
         setAlbum("none");
         setImage(false);
         setSong(false);
@@ -97,13 +174,17 @@ const AddSong = () => {
         setSelectedGenres([]);
         setNewGenres([]);
         setNewGenre("");
+        setYoutubeUrl("");
+        
+        // Clear localStorage after successful submission
+        clearStoredFormData();
       } else {
         toast.error("Something went wrong");
       }
 
     } catch (error) {
       console.log(error);
-      toast.error("Error occured");
+      toast.error("Error occurred");
     }
     setLoading(false);
   }
@@ -275,6 +356,23 @@ const AddSong = () => {
           </label>
         </div>
       </div>
+
+      {/* YouTube URL input field - without separate fetch button */}
+      <div className='flex flex-col gap-2.5 w-full'>
+        <p>YouTube URL (optional)</p>
+        <div className='flex items-center border-2 border-gray-400 focus-within:border-green-600'>
+          <span className='px-2 text-red-600'><FaYoutube size={24} /></span>
+          <input 
+            onChange={(e) => setYoutubeUrl(e.target.value)} 
+            value={youtubeUrl} 
+            className='bg-transparent outline-none p-2.5 flex-grow' 
+            placeholder='https://www.youtube.com/watch?v=...' 
+            type="text"
+          />
+        </div>
+        <p className='text-xs text-gray-500'>Enter a YouTube URL to automatically fetch song details when adding</p>
+      </div>
+
       <div className='flex flex-col gap-2.5'>
         <p>Song name</p>
         <input onChange={(e) => setName(e.target.value)} value={name} className='bg-transparent outline-green-600 border-2 border-gray-400 p-2.5 w-[max(40vw,250vw)]' placeholder='Type Here' type="text" required/>

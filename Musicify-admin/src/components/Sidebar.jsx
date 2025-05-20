@@ -1,42 +1,75 @@
 import React from 'react'
-import { assets } from '../assets/admin-assets/assets.js';
-import { NavLink } from 'react-router-dom';
+import { assets } from '../assets/admin-assets/assets'
 
-const Sidebar = () => {
+const Sidebar = ({ currentPath, navigateTo, activeTab, switchTab }) => {
+  // Define menu items grouped by category
+  const menuItems = {
+    add: [
+      { path: '/add-song', icon: assets.add_song, label: 'Add Song' },
+      { path: '/add-album', icon: assets.add_album, label: 'Add Album' },
+      { path: '/add-artist', icon: assets.add_artist, label: 'Add Artist' },
+      { path: '/add-genre', icon: assets.genre_icon, label: 'Add Genre' },
+    ],
+    list: [
+      { path: '/list-song', icon: assets.song_icon, label: 'List Song' },
+      { path: '/list-album', icon: assets.album_icon, label: 'List Album' },
+      { path: '/list-artist', icon: assets.artist_icon, label: 'List Artist' },
+      { path: '/list-genre', icon: assets.genre_icon, label: 'List Genre' },
+    ]
+  };
+
   return (
-    <div className='bg-[#003a10] min-h-screen pl-[4vw]'>
-        <img src={assets.logo} className='mt-5 w-[max(10vw,100px)] hidden sm:block' alt="" />
-        <img src={assets.logo_small} className='mt-5 w-[max(5vw, 40px)] mr-5 sm:hidden block' alt="" />
-        <div className='flex flex-col gap-5 mt-10'>
-            <NavLink to='/add-song' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
-                <img src={assets.add_song} className='w-5' alt="" />
-                <p className='hidden sm:block'>Add Song</p>
-            </NavLink>
-            <NavLink to='/list-song' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
-                <img src={assets.song_icon} className='w-5' alt="" />
-                <p className='hidden sm:block'>List Song</p>
-            </NavLink>
-            <NavLink to='/add-album' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
-                <img src={assets.add_album} className='w-5' alt="" />
-                <p className='hidden sm:block'>Add Album</p>
-            </NavLink>
-            <NavLink to='/list-album' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
-                <img src={assets.album_icon} className='w-5' alt="" />
-                <p className='hidden sm:block'>List Album</p>
-            </NavLink>
-            <NavLink to='/add-artist' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
-                <img src={assets.add_artist} className='w-5' alt="" />
-                <p className='hidden sm:block'>Add Artist</p>
-            </NavLink>
-            <NavLink to='/list-artist' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
-                <img src={assets.artist_icon} className='w-5' alt="" />
-                <p className='hidden sm:block'>List Artist</p>
-            </NavLink>
-            <NavLink to='/list-genre' className='flex items-center gap-2.5 text-gray-800 bg-white border border-black p-2 pr-[max(8vw,10px)] drop-shadow-[-4px_4px_#00ff5b] text-sm font-medium'>
-                <img src={assets.genre_icon} className='w-5' alt="" />
-                <p className='hidden sm:block'>List Genre</p>
-            </NavLink>
-        </div>
+    <div className='w-[20%] min-w-[200px] h-screen bg-black text-white p-5 flex flex-col gap-10'>
+      <div className='flex items-center gap-2.5'>
+        <img src={assets.logo} className='w-12' alt="" />
+        <p className='text-xl font-semibold'>Musicify</p>
+      </div>
+      
+      {/* Tab buttons */}
+      <div className="flex border-b border-gray-700 mb-2">
+        <button
+          onClick={() => switchTab('add')}
+          className={`px-4 py-2 ${
+            activeTab === 'add' 
+              ? 'text-green-500 border-b-2 border-green-500' 
+              : 'text-white hover:text-green-400'
+          }`}
+        >
+          Add
+        </button>
+        <button
+          onClick={() => switchTab('list')}
+          className={`px-4 py-2 ${
+            activeTab === 'list' 
+              ? 'text-green-500 border-b-2 border-green-500' 
+              : 'text-white hover:text-green-400'
+          }`}
+        >
+          List
+        </button>
+      </div>
+      
+      {/* Menu items for the active tab */}
+      <div className='flex flex-col gap-3'>
+        {menuItems[activeTab]?.map((item) => (
+          <div 
+            key={item.path}
+            onClick={() => navigateTo(item.path)}
+            className={`
+              flex items-center gap-3 cursor-pointer 
+              bg-white text-black font-medium
+              border border-black rounded
+              p-2 pl-3
+              ${currentPath === item.path ? 'shadow-[0_0_5px_2px_rgba(0,128,0,0.5)]' : ''}
+              hover:shadow-[0_0_5px_2px_rgba(0,128,0,0.3)]
+              transition-shadow duration-200
+            `}
+          >
+            <img src={item.icon} className='w-5 h-5' alt="" />
+            <p>{item.label}</p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

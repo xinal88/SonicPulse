@@ -1,10 +1,10 @@
-import axios from 'axios';
-import React, { useEffect, useState } from 'react'
-import { toast } from 'react-toastify';
-import { url } from '../App';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaSearch } from 'react-icons/fa';
-import { FaTrash } from 'react-icons/fa';
+import axios from 'axios';
+import { url } from '../App';
+import { toast } from 'react-toastify';
+import { assets } from '../assets/admin-assets/assets';
+import { FaSearch, FaTrash, FaEdit } from 'react-icons/fa';
 
 const ListAlbum = () => {
   const [data, setData] = useState([]);
@@ -23,7 +23,6 @@ const ListAlbum = () => {
       if (response.data.success) {
         setData(response.data.albums);
       }
-
     } catch (error) {
       toast.error('Error occurred');
     }
@@ -153,7 +152,7 @@ const ListAlbum = () => {
         </form>
       </div>
       <div>
-        <div className='sm:grid hidden grid-cols-[0.5fr_1fr_2fr_1fr_0.5fr_0.5fr] items-center gap-2.5 p-3 border border-gray-300 text-sm mr-5 br-gray-100'>
+        <div className='sm:grid hidden grid-cols-[0.5fr_1fr_2fr_1fr_0.5fr_0.5fr] items-center gap-2.5 p-3 border border-gray-300 text-sm mr-5 bg-gray-100'>
           <b>Image</b>
           <b>Name</b>
           <b>Description</b>
@@ -168,15 +167,16 @@ const ListAlbum = () => {
               <p>{item.name}</p>
               <p>{item.desc}</p>
               <input type="color" value={item.bgColor} readOnly />
-              <button
-                onClick={() => navigate(`/edit-album/${item._id}`)}
-                className='bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600'
+              <button 
+                onClick={() => navigate(`/edit-album/${item._id}`)} 
+                className='bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 flex items-center gap-1 justify-center'
               >
-                Edit
+                <FaEdit size={14} />
+                <span>Edit</span>
               </button>
               <button
                 onClick={() => initiateAlbumDelete(item._id, item.name)}
-                className='bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 flex items-center gap-1'
+                className='bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 flex items-center gap-1 justify-center'
               >
                 <FaTrash size={14} />
                 <span>Delete</span>

@@ -1,14 +1,17 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import React, { useEffect, useState } from 'react'
-import { toast } from 'react-toastify';
 import { url } from '../App';
-import { FaSearch } from 'react-icons/fa';
+import { toast } from 'react-toastify';
+import { assets } from '../assets/admin-assets/assets';
+import { FaSearch, FaTrash, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
 
 const ListGenre = () => {
   const [data, setData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingGenre, setEditingGenre] = useState(null);
   const [newGenreName, setNewGenreName] = useState('');
+  const navigate = useNavigate();
 
   const fetchGenres = async (search = '') => {
     try {

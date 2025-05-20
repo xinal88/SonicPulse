@@ -13,7 +13,11 @@ const AuthSync = () => {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        // Add these headers to help with CORS
+                        'Accept': 'application/json',
                     },
+                    // Don't include credentials for this request
+                    credentials: 'omit',
                     body: JSON.stringify({
                         id: user.id,
                         firstName: user.firstName,
@@ -23,16 +27,20 @@ const AuthSync = () => {
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to sync user with backend');
+                    console.warn('Failed to sync user with backend:', response.status);
+                    return;
                 }
 
                 await response.json();
             } catch (error) {
-                // Silently handle errors in production
+                // Log error but don't disrupt the user experience
+                console.warn('Error syncing user with backend:', error);
             }
         };
 
-        syncUserWithBackend();
+        // Add a small delay to avoid race conditions with Clerk initialization
+        const timeoutId = setTimeout(syncUserWithBackend, 1000);
+        return () => clearTimeout(timeoutId);
     }, [user, isLoaded]);
 
     return null; // This component doesn't render anything

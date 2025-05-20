@@ -2,6 +2,7 @@
 import { createContext, useEffect, useRef, useState, useCallback } from "react";
 import axios from 'axios';
 import { fetchAndParseLRC } from "../utils/lrcParser";
+import { toast } from 'react-toastify';
 
 export const PlayerContext = createContext();
 
@@ -190,6 +191,61 @@ const PlayerContextProvider = (props) => {
 
         getGenres();
     }, [url]); // No longer dependent on songsData
+
+    // Listen for messages from the Shazam popup
+    useEffect(() => {
+        const handleShazamMessage = (event) => {
+            try {
+                // Verify the origin if needed
+                // if (event.origin !== 'http://localhost:3000') return;
+                
+                if (!event.data) return;
+                
+                if (event.data.type === 'SONG_IDENTIFIED' || event.data.type === 'SONG_SELECTED') {
+                    const { song } = event.data;
+                    
+                    // Validate song data
+                    if (!song || (!song.title && !song.name)) {
+                        console.warn('Invalid song data received:', song);
+                        return;
+                    }
+                    
+                    // Try to find the song in our library
+                    const songTitle = song.title || song.name;
+                    const songArtist = song.artist || song.artistName;
+                    
+                    // Look for a match by title and artist
+                    const matchingSong = songsData.find(s => 
+                        (s.name && songTitle && s.name.toLowerCase().includes(songTitle.toLowerCase())) || 
+                        (songArtist && s.artistName && s.artistName.toLowerCase().includes(songArtist.toLowerCase()))
+                    );
+                    
+                    if (matchingSong) {
+                        // Play the matching song
+                        setTrack(matchingSong);
+                        setPlayOnLoad(true);
+                        toast.success(`Now playing: ${matchingSong.name} by ${matchingSong.artistName}`);
+                    } else if (songTitle) {
+                        // If no match found, show a message
+                        toast.info(`Song "${songTitle}" ${songArtist ? `by ${songArtist}` : ''} not found in your library`);
+                        
+                        // Optionally, you could open YouTube if youtubeId is available
+                        if (song.youtubeId) {
+                            window.open(`https://www.youtube.com/watch?v=${song.youtubeId}`, '_blank');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error handling Shazam message:', error);
+            }
+        };
+        
+        window.addEventListener('message', handleShazamMessage);
+        
+        return () => {
+            window.removeEventListener('message', handleShazamMessage);
+        };
+    }, [songsData]);
 
     // Effect to handle track changes
     useEffect(() => {

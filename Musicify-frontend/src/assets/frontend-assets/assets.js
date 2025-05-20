@@ -3,6 +3,7 @@ import home_icon from './home.png'
 import like_icon from './like.png'
 import loop_icon from './loop.png'
 import mic_icon from './mic.png'
+import shazam_icon from './shazam.png'
 import next_icon from './next.png'
 import play_icon from './play.png'
 import pause_icon from './pause.png'
@@ -51,6 +52,7 @@ export const assets = {
     like_icon,
     loop_icon,
     mic_icon,
+    shazam_icon,
     next_icon,
     play_icon,
     plays_icon,

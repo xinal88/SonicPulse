@@ -3,21 +3,23 @@ import { assets } from '../assets/admin-assets/assets'
 import axios from 'axios';
 import { url } from '../App';
 import { toast } from 'react-toastify';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { isDuplicateGenre } from '../utils/genreUtils';
+import { FaYoutube } from 'react-icons/fa';
 
 const EditSong = () => {
+  // Get id from URL params instead of props
   const { id } = useParams();
   const navigate = useNavigate();
-
+  
+  // Initialize state with localStorage values if available
   const [image, setImage] = useState(false);
-  const [imageUrl, setImageUrl] = useState('');
   const [song, setSong] = useState(false);
   const [lrcFile, setLrcFile] = useState(false);
   const [name, setName] = useState("");
-  const [selectedArtists, setSelectedArtists] = useState([]); // Array of selected artist IDs
+  const [selectedArtists, setSelectedArtists] = useState([]);
   const [album, setAlbum] = useState("none");
-  const [useAlbumImage, setUseAlbumImage] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [albumData, setAlbumData] = useState([]);
   const [artistData, setArtistData] = useState([]);
@@ -25,6 +27,8 @@ const EditSong = () => {
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [newGenre, setNewGenre] = useState("");
   const [newGenres, setNewGenres] = useState([]);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [useAlbumImage, setUseAlbumImage] = useState(false);
 
   // Fetch song and album data when component mounts
   useEffect(() => {
@@ -36,28 +40,44 @@ const EditSong = () => {
         if (songResponse.data.success) {
           const songData = songResponse.data.songs.find(song => song._id === id);
           if (songData) {
-            setName(songData.name);
-
-            // Handle artist data - could be string or array
-            if (songData.artist) {
-              if (Array.isArray(songData.artist)) {
-                setSelectedArtists(songData.artist);
-              } else {
-                // For backward compatibility with songs that have a single artist
-                setSelectedArtists([songData.artist]);
+            // Only set these values if they're not already in localStorage
+            if (!localStorage.getItem(`editSong_${id}_name`)) {
+              setName(songData.name);
+            }
+            
+            if (!localStorage.getItem(`editSong_${id}_selectedArtists`)) {
+              // Handle artist data - could be string or array
+              if (songData.artist) {
+                if (Array.isArray(songData.artist)) {
+                  setSelectedArtists(songData.artist);
+                } else {
+                  // For backward compatibility with songs that have a single artist
+                  setSelectedArtists([songData.artist]);
+                }
               }
             }
-
-            setAlbum(songData.album);
-            setImageUrl(songData.image);
-            // Set selected genres if they exist
-            if (songData.genres && Array.isArray(songData.genres)) {
-              console.log("Song has genres:", songData.genres);
-              setSelectedGenres(songData.genres);
-            } else {
-              console.log("Song has no genres or genres is not an array:", songData.genres);
+            
+            if (!localStorage.getItem(`editSong_${id}_album`)) {
+              setAlbum(songData.album);
             }
-            // Note: We can't set the actual audio file since it's not returned in the API
+            
+            if (!localStorage.getItem(`editSong_${id}_imageUrl`)) {
+              setImageUrl(songData.image);
+            }
+            
+            if (!localStorage.getItem(`editSong_${id}_selectedGenres`)) {
+              // Set selected genres if they exist
+              if (songData.genres && Array.isArray(songData.genres)) {
+                console.log("Song has genres:", songData.genres);
+                setSelectedGenres(songData.genres);
+              } else {
+                console.log("Song has no genres or genres is not an array:", songData.genres);
+              }
+            }
+            
+            if (!localStorage.getItem(`editSong_${id}_youtubeUrl`) && songData.youtubeUrl) {
+              setYoutubeUrl(songData.youtubeUrl);
+            }
           } else {
             toast.error("Song not found");
             navigate('/list-song');
@@ -188,14 +208,46 @@ const EditSong = () => {
   const onSubmitHandler = async (e) => {
     e.preventDefault();
     setLoading(true);
+    
     // Validate that at least one artist is selected
     if (selectedArtists.length === 0) {
       toast.error("Please select at least one artist");
       setLoading(false);
       return;
     }
-
+    
     try {
+      // If YouTube URL is provided, fetch details first
+      if (youtubeUrl) {
+        try {
+          toast.info("Fetching details from YouTube...");
+          const ytResponse = await axios.post(`${url}/api/song/download`, { youtubeUrl });
+          
+          // If no name is provided, use the one from YouTube
+          if (!name && ytResponse.data.title) {
+            setName(ytResponse.data.title);
+          }
+          
+          // If no artists are selected and YouTube provides an artist, try to match
+          if (selectedArtists.length === 0 && ytResponse.data.artist) {
+            const artistName = ytResponse.data.artist;
+            const existingArtist = artistData.find(
+              a => a.name.toLowerCase() === artistName.toLowerCase()
+            );
+            
+            if (existingArtist) {
+              setSelectedArtists([existingArtist._id]);
+            }
+          }
+          
+          toast.success("YouTube details fetched successfully");
+        } catch (error) {
+          console.error("Error fetching from YouTube:", error);
+          toast.error("Failed to fetch details from YouTube. Continuing with update.");
+          // Continue with song update even if YouTube fetch fails
+        }
+      }
+      
       const formData = new FormData();
       formData.append('id', id);
       formData.append('name', name);
@@ -224,6 +276,11 @@ const EditSong = () => {
         formData.append('lrc', lrcFile);
       }
 
+      if (youtubeUrl) {
+        formData.append('youtubeUrl', youtubeUrl);
+        formData.append('generateFingerprint', 'true');
+      }
+
       // Add genres
       console.log("Sending selected genres:", selectedGenres);
       selectedGenres.forEach(genreId => {
@@ -240,6 +297,8 @@ const EditSong = () => {
 
       if (response.data.success) {
         toast.success("Song Updated");
+        // Clear localStorage after successful update
+        clearStoredFormData();
         navigate('/list-song');
       } else {
         toast.error("Something went wrong");
@@ -249,6 +308,16 @@ const EditSong = () => {
       toast.error("Error occurred");
     }
     setLoading(false);
+  };
+
+  // Clear stored form data
+  const clearStoredFormData = () => {
+    localStorage.removeItem(`editSong_${id}_name`);
+    localStorage.removeItem(`editSong_${id}_selectedArtists`);
+    localStorage.removeItem(`editSong_${id}_album`);
+    localStorage.removeItem(`editSong_${id}_imageUrl`);
+    localStorage.removeItem(`editSong_${id}_selectedGenres`);
+    localStorage.removeItem(`editSong_${id}_youtubeUrl`);
   };
 
   return loading ? (
@@ -305,6 +374,20 @@ const EditSong = () => {
             </label>
             <p className="text-xs text-gray-500">Current LRC file will be kept if no new file is selected</p>
           </div>
+        </div>
+        <div className='flex flex-col gap-2.5 w-full'>
+          <p>YouTube URL (optional)</p>
+          <div className='flex items-center border-2 border-gray-400 focus-within:border-green-600'>
+            <span className='px-2 text-red-600'><FaYoutube size={24} /></span>
+            <input 
+              onChange={(e) => setYoutubeUrl(e.target.value)} 
+              value={youtubeUrl} 
+              className='bg-transparent outline-none p-2.5 flex-grow' 
+              placeholder='https://www.youtube.com/watch?v=...' 
+              type="text"
+            />
+          </div>
+          <p className='text-xs text-gray-500'>Enter a YouTube URL to automatically fetch song details when updating</p>
         </div>
         <div className='flex flex-col gap-2.5'>
           <p>Song name</p>

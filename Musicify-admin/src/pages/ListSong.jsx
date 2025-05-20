@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { url } from '../App';
 import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
-import { FaSearch } from 'react-icons/fa';
-
+import { assets } from '../assets/admin-assets/assets';
+import { FaSearch, FaTrash, FaEdit } from 'react-icons/fa';
 
 const ListSong = () => {
   const [data, setData] = useState([]);
@@ -33,6 +33,9 @@ const ListSong = () => {
 
   const removeSong = async (id) => {
     try {
+      if (!window.confirm("Are you sure you want to delete this song?")) {
+        return;
+      }
 
       const response = await axios.post(`${url}/api/song/remove`, {id});
 
@@ -40,7 +43,6 @@ const ListSong = () => {
         toast.success(response.data.message);
         await fetchSongs();
       }
-
     } catch (error) {
       toast.error("Error Occurred");
     }
@@ -91,17 +93,19 @@ const ListSong = () => {
               <p>{item.artistName || item.artist}</p>
               <p>{item.album}</p>
               <p>{item.duration}</p>
-              <button
-                onClick={() => navigate(`/edit-song/${item._id}`)}
-                className='bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600'
+              <button 
+                onClick={() => navigate(`/edit-song/${item._id}`)} 
+                className='bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 flex items-center gap-1 justify-center'
               >
-                Edit
+                <FaEdit size={14} />
+                <span>Edit</span>
               </button>
               <button
                 onClick={() => removeSong(item._id)}
-                className='bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600'
+                className='bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 flex items-center gap-1 justify-center'
               >
-                Delete
+                <FaTrash size={14} />
+                <span>Delete</span>
               </button>
             </div>
           )

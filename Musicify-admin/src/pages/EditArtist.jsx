@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom';
 import { assets } from '../assets/admin-assets/assets'
+import axios from 'axios';
 import { url } from '../App';
 import { toast } from 'react-toastify';
-import axios from 'axios';
-import { useParams, useNavigate } from 'react-router-dom';
 
 const EditArtist = () => {
+  // Get id from URL params instead of props
   const { id } = useParams();
   const navigate = useNavigate();
 

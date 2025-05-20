@@ -13,6 +13,14 @@ const Navbar = ({ showNavigation }) => {
     const location = useLocation()
     const [showShazamModal, setShowShazamModal] = useState(false)
     const [shazamLoading, setShazamLoading] = useState(false)
+    const [shazamModalState, setShazamModalState] = useState({
+        audioBlob: null,
+        audioSource: null,
+        audioUrl: null,
+        matches: [],
+        error: null,
+        recording: false
+    })
     const modalRef = useRef(null)
 
     // If showNavigation prop is not provided, determine based on location
@@ -24,11 +32,7 @@ const Navbar = ({ showNavigation }) => {
     useEffect(() => {
         function handleClickOutside(event) {
             if (modalRef.current && !modalRef.current.contains(event.target)) {
-                // Don't reset the modal state, just hide it
-                if (shazamLoading) {
-                    // If loading, don't close the modal
-                    return;
-                }
+                // Always allow hiding the modal when clicking outside
                 setShowShazamModal(false);
                 // We're not resetting state here, just hiding the modal
             }
@@ -42,7 +46,7 @@ const Navbar = ({ showNavigation }) => {
         return () => {
             document.removeEventListener("mousedown", handleClickOutside);
         };
-    }, [showShazamModal, shazamLoading]);
+    }, [showShazamModal]);
 
     // Toggle Shazam modal
     const toggleShazamModal = () => {
@@ -63,19 +67,10 @@ const Navbar = ({ showNavigation }) => {
 
     return (
         <>
-            <div className='w-full flex justify-between items-center font-semibold'>
-                <div className='fixed bottom-4 right-4 z-50'>
-                    <button 
-                        onClick={() => window.location.reload()}
-                        className="bg-red-600 text-white p-2 rounded-full shadow-lg"
-                        title="Emergency Reload"
-                    >
-                        ↻
-                    </button>
-                </div>
-                <div className='flex items-center gap-2'>
-                    <img onClick={() => navigate(-1)} className='w-8 bg-black p-2 rounded-2xl cursor-pointer' src={assets.arrow_left} alt="" />
-                    <img onClick={() => navigate(1)} className='w-8 bg-black p-2 rounded-2xl cursor-pointer' src={assets.arrow_right} alt="" />
+            <div className='w-[75%] flex justify-between items-center font-semibold fixed top-0 right-0 z-50 bg-[#121212] py-3 px-6 h-14 shadow-sm'>
+                <div className='flex items-center gap-3'>
+                    <img onClick={() => navigate(-1)} className='w-8 bg-black p-1.5 rounded-2xl cursor-pointer' src={assets.arrow_left} alt="" />
+                    <img onClick={() => navigate(1)} className='w-8 bg-black p-1.5 rounded-2xl cursor-pointer' src={assets.arrow_right} alt="" />
                 </div>
                 <div className='flex items-center gap-4 relative'>
                     <div 
@@ -89,17 +84,21 @@ const Navbar = ({ showNavigation }) => {
                         />
                     </div>
                     
-                    {/* Shazam Modal */}
-                    {showShazamModal && (
-                        <div 
-                            ref={modalRef}
-                            className="absolute top-12 right-0 w-96 bg-[#121212] border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden"
-                        >
-                            <ErrorBoundary onReset={() => setShowShazamModal(false)}>
-                                <ShazamModal setShowShazamModal={setShowShazamModal} setShazamLoading={setShazamLoading} />
-                            </ErrorBoundary>
-                        </div>
-                    )}
+                    {/* Shazam Modal - Always render but conditionally show/hide */}
+                    <div 
+                        ref={modalRef}
+                        className={`absolute top-12 right-0 w-96 bg-[#121212] border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden transition-opacity duration-200 ${
+                            showShazamModal ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+                        }`}
+                    >
+                        <ErrorBoundary onReset={() => setShowShazamModal(false)}>
+                            <ShazamModal 
+                                setShowShazamModal={setShowShazamModal} 
+                                setShazamLoading={setShazamLoading}
+                                visible={showShazamModal}
+                            />
+                        </ErrorBoundary>
+                    </div>
                     
                     <SignedOut>
                         <SignInButton>
@@ -140,7 +139,7 @@ const Navbar = ({ showNavigation }) => {
 }
 
 // Shazam Modal Component
-const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
+const ShazamModal = ({ setShowShazamModal, setShazamLoading, visible }) => {
     // Use refs to persist state between modal opens/closes
     const [recording, setRecording] = useState(false);
     const [audioBlob, setAudioBlob] = useState(null);
@@ -155,29 +154,31 @@ const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
     const mediaRecorder = useRef(null);
     const audioChunks = useRef([]);
     
+    // Add PlayerContext to access songsData and setTrack
+    const { songsData, setTrack, play } = useContext(PlayerContext);
+    
     // Update parent component's loading state when this component's loading state changes
     useEffect(() => {
         setShazamLoading(loading);
-    }, [loading]);
+    }, [loading, setShazamLoading]);
 
     // When modal is closed, stop recording if in progress
     useEffect(() => {
-        return () => {
-            // Cleanup function that runs when component unmounts
-            if (recording) {
-                // Stop recording if it's in progress
-                if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
-                    mediaRecorder.current.stop();
-                    mediaRecorder.current.stream?.getTracks().forEach(track => track.stop());
-                }
+        if (!visible && recording) {
+            // Stop recording if it's in progress when modal is hidden
+            if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
+                mediaRecorder.current.stop();
+                mediaRecorder.current.stream?.getTracks().forEach(track => track.stop());
+                setRecording(false);
             }
             
             // Clear any timers
             if (recordingTimer) {
                 clearInterval(recordingTimer);
+                setRecordingTimer(null);
             }
-        };
-    }, [recording, recordingTimer]);
+        }
+    }, [visible, recording, recordingTimer]);
     
     const MAX_RECORDING_TIME = 30; // Maximum recording time in seconds
 
@@ -441,7 +442,7 @@ const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
                     'Content-Type': 'multipart/form-data'
                 },
                 signal: controller.signal,
-                withCredentials: false // Important for CORS
+                withCredentials: false
             });
             
             clearTimeout(timeoutId);
@@ -450,15 +451,33 @@ const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
                 setError(response.data.message || "Failed to identify song");
                 return;
             }
-            
-            // Only show songs, not artists
-            const songMatches = response.data.matches?.filter(match => match.name) || [];
+
+            // First try to get matches with confidence >= 75%
+            let songMatches = response.data.matches
+                ?.filter(match => {
+                    const confidence = typeof match.confidence === 'number' 
+                        ? match.confidence 
+                        : typeof match.score === 'number' 
+                            ? Math.round(match.score * 100)
+                            : 0;
+                    return confidence >= 75 && (match.name || match.title);
+                })
+                .slice(0, 3) || [];
+
+            // If no matches meet the threshold, just take top 3 regardless of confidence
+            if (songMatches.length === 0 && response.data.matches?.length > 0) {
+                songMatches = response.data.matches
+                    .filter(match => match.name || match.title)
+                    .slice(0, 3);
+                
+                // Add a note that these are lower confidence matches
+                setError("No matches with high confidence found. Showing best available matches.");
+            }
+
             setMatches(songMatches);
             
-            // If we have a message from the server, show it
-            if (response.data.message) {
-                setError(response.data.message);
-            }
+            // Debug log to check what's being set
+            console.log("Setting matches:", songMatches);
         } catch (error) {
             console.error("Error identifying song:", error);
             if (error.name === 'AbortError') {
@@ -475,8 +494,8 @@ const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
 
     const playInMusicify = (match) => {
         // Try to find the song in our library
-        if (match && match.name) {
-            console.log("Trying to find match for:", match.name, match.artist);
+        if (match && (match.name || match.title)) {
+            console.log("Trying to find match for:", match.name || match.title, match.artist);
             
             // First try to match by ID if available
             if (match.songId) {
@@ -500,7 +519,7 @@ const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
                 return text ? text.toLowerCase().replace(/[^\w\s]/g, '') : '';
             };
             
-            const normalizedTitle = normalizeText(match.name);
+            const normalizedTitle = normalizeText(match.name || match.title);
             const normalizedArtist = normalizeText(match.artist);
             
             // Look for a match by title and artist with more flexible matching
@@ -533,7 +552,7 @@ const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
             } else {
                 // If no match found, show a message
                 console.log("No matching song found in library");
-                alert(`Song "${match.name}" by ${match.artist || 'Unknown Artist'} not found in your library`);
+                alert(`Song "${match.name || match.title}" by ${match.artist || 'Unknown Artist'} not found in your library`);
                 setShowShazamModal(false); // Close modal
             }
         }
@@ -700,23 +719,20 @@ const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
                 <div className="bg-[#232323] p-4 rounded-lg">
                     <h3 className="text-lg font-semibold mb-3">Results</h3>
                     
-                    {error ? (
-                        <div className="p-3 bg-red-900/50 text-red-200 rounded-lg text-sm">
-                            {error}
-                        </div>
-                    ) : matches.length > 0 ? (
+                    {matches.length > 0 ? (
                         <div className="space-y-3 max-h-60 overflow-y-auto">
                             {matches.map((match, index) => (
                                 <div
                                     key={index}
-                                    className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg mb-2 flex items-center"
-                                    >
+                                    className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg mb-2 flex items-center cursor-pointer hover:bg-gray-600 transition-colors"
+                                    onClick={() => playInMusicify(match)}
+                                >
                                     {/* Song image */}
                                     <div className="w-12 h-12 mr-3 flex-shrink-0">
                                         <img 
-                                        src={match.image || assets.default_album} 
-                                        alt={match.title} 
-                                        className="w-full h-full object-cover rounded"
+                                            src={match.image || assets.default_album} 
+                                            alt={match.title || match.name} 
+                                            className="w-full h-full object-cover rounded"
                                         />
                                     </div>
                                     
@@ -727,14 +743,14 @@ const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
                                         </div>
                                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                             Confidence: {typeof match.confidence === 'number' 
-                                            ? `${match.confidence}%` 
-                                            : typeof match.score === 'number' 
-                                                ? `${(match.score * 100).toFixed(1)}%` 
-                                                : 'Unknown'}
+                                                ? `${match.confidence}%` 
+                                                : typeof match.score === 'number' 
+                                                    ? `${(match.score * 100).toFixed(1)}%` 
+                                                    : 'Unknown'}
                                             {match.consecutive > 1 && ` (${match.consecutive} consecutive matches)`}
                                         </div>
-                                        </div>
                                     </div>
+                                </div>
                             ))}
                         </div>
                     ) : (
@@ -747,6 +763,13 @@ const ShazamModal = ({ setShowShazamModal, setShazamLoading }) => {
                             ) : (
                                 <p>Record or upload audio to identify songs</p>
                             )}
+                        </div>
+                    )}
+                    
+                    {/* Display error message below results if there is one */}
+                    {error && (
+                        <div className="p-3 mt-3 bg-red-900/50 text-red-200 rounded-lg text-sm">
+                            {error}
                         </div>
                     )}
                 </div>

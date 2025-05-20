@@ -935,9 +935,18 @@ const findMatches = async (req, res) => {
                         }
                         
                         console.log(`Found ${matches.length} potential matches`);
+                        // First sort by confidence
+                        const sortedMatches = matches.sort((a, b) => b.confidence - a.confidence);
+
+                        // Check if any matches meet the threshold
+                        const highConfidenceMatches = sortedMatches.filter(match => match.confidence >= 75);
+
+                        // Return either high confidence matches or top 3 regardless
                         return res.json({ 
                             success: true, 
-                            matches: matches.sort((a, b) => b.confidence - a.confidence) 
+                            matches: highConfidenceMatches.length > 0
+                                ? highConfidenceMatches.slice(0, 3)  // Return up to 3 high confidence matches
+                                : sortedMatches.slice(0, 3)          // Return top 3 regardless of confidence
                         });
                     } catch (webmError) {
                         console.error("Error processing WebM:", webmError);

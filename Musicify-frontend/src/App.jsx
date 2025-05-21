@@ -6,11 +6,12 @@ import Display from './components/Display'
 import NowPlaying from './components/NowPlaying'
 import NowPlayingSidebar from './components/NowPlayingSidebar'
 import QueueSidebar from './components/QueueSidebar'
+import SelectPlaylistModal from './components/SelectPlaylistModal'
 import { PlayerContext } from './context/PlayerContext'
 
 const App = () => {
 
-  const {audioRef, track, songsData, showNowPlaying, showFullscreen, showQueue} = useContext(PlayerContext);
+  const {audioRef, track, songsData, showNowPlaying, showFullscreen, showQueue, showSelectPlaylist, setShowSelectPlaylist} = useContext(PlayerContext);
 
   return (
     <div className='h-screen bg-black'>
@@ -25,6 +26,13 @@ const App = () => {
             </div>
             <Player />
             {showFullscreen && <NowPlaying />}
+            {showSelectPlaylist && <SelectPlaylistModal onClose={(playlistId) => {
+              setShowSelectPlaylist(false);
+              if (playlistId) {
+                // Navigate to the playlist if a playlist was selected
+                window.location.href = `/#/playlist/${playlistId}`;
+              }
+            }} />}
           </>
           : <div className="h-full w-full flex flex-col items-center justify-center text-white">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mb-4"></div>

@@ -45,8 +45,25 @@ const AddToPlaylistModal = ({ songId, onClose }) => {
             (playlist.creator.clerkId !== user.id && playlist.creator._id !== user.id)
           );
 
-          // Combine with the user's refreshed playlists
-          return [...otherPlaylists, ...response.data.playlists];
+          // Create a map to track all playlists by ID to prevent duplicates
+          const playlistMap = new Map();
+
+          // Add other playlists to the map
+          otherPlaylists.forEach(playlist => {
+            if (playlist._id) {
+              playlistMap.set(playlist._id, playlist);
+            }
+          });
+
+          // Add user's refreshed playlists to the map (will overwrite any duplicates)
+          response.data.playlists.forEach(playlist => {
+            if (playlist._id) {
+              playlistMap.set(playlist._id, playlist);
+            }
+          });
+
+          // Convert the map values back to an array
+          return Array.from(playlistMap.values());
         });
       } else {
         console.error("Failed to refresh playlists:", response.data.message);
@@ -64,33 +81,31 @@ const AddToPlaylistModal = ({ songId, onClose }) => {
     refreshPlaylists();
   }, [isSignedIn, user]);
 
-  // Filter playlists for the current user
+  // Show all playlists to allow users to add songs to any playlist, but remove duplicates
   useEffect(() => {
     if (isSignedIn && user) {
-      console.log("Filtering playlists for user:", user.id);
+      console.log("Setting playlists for user:", user.id);
       console.log("Available playlists:", playlistsData.length);
 
-      // Filter playlists to show user's playlists
-      // The creator might have either clerkId or _id that matches the user's Clerk ID
-      const filteredPlaylists = playlistsData.filter(playlist => {
-        if (!playlist.creator) return false;
+      // Create a map to track playlists by ID to remove duplicates
+      const playlistMap = new Map();
 
-        // Check if creator has clerkId that matches user's id
-        if (playlist.creator.clerkId && playlist.creator.clerkId === user.id) {
-          return true;
+      // Process all playlists and keep only one instance of each playlist ID
+      playlistsData.forEach(playlist => {
+        // Skip playlists without a creator
+        if (!playlist.creator) return;
+
+        // If this playlist ID is not in our map yet, add it
+        if (!playlistMap.has(playlist._id)) {
+          playlistMap.set(playlist._id, playlist);
         }
-
-        // As a fallback, check if creator._id matches user's id
-        // This is for backward compatibility
-        if (playlist.creator._id === user.id) {
-          return true;
-        }
-
-        return false;
       });
 
-      console.log("Filtered playlists for user:", filteredPlaylists.length);
-      setUserPlaylists(filteredPlaylists);
+      // Convert the map values back to an array
+      const uniquePlaylists = Array.from(playlistMap.values());
+
+      console.log("Available playlists after removing duplicates:", uniquePlaylists.length);
+      setUserPlaylists(uniquePlaylists);
     }
   }, [playlistsData, user, isSignedIn]);
 
@@ -298,7 +313,7 @@ const AddToPlaylistModal = ({ songId, onClose }) => {
               ) : (
                 <div className="max-h-60 overflow-y-auto">
                   <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-lg font-semibold">Your Playlists</h3>
+                    <h3 className="text-lg font-semibold">Available Playlists</h3>
                     <button
                       onClick={refreshPlaylists}
                       className="p-1 rounded-full hover:bg-[#333333] transition-colors"
@@ -329,7 +344,11 @@ const AddToPlaylistModal = ({ songId, onClose }) => {
                             {playlist.isPublic === false && (
                               <span className="text-xs px-1 py-0.5 bg-gray-700 rounded text-gray-300">Private</span>
                             )}
-                            <span className="text-xs px-1 py-0.5 bg-green-900 rounded text-green-300">Yours</span>
+                            {/* Only show "Yours" label for playlists the user owns */}
+                            {((playlist.creator.clerkId && playlist.creator.clerkId === user.id) ||
+                              (playlist.creator._id && playlist.creator._id === user.id)) && (
+                              <span className="text-xs px-1 py-0.5 bg-green-900 rounded text-green-300">Yours</span>
+                            )}
                           </div>
                         </div>
                         <p className="text-gray-400 text-xs truncate">

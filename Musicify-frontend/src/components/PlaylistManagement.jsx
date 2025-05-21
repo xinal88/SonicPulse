@@ -24,7 +24,8 @@ const PlaylistManagement = ({ playlistId, onClose }) => {
   const [playlistDetails, setPlaylistDetails] = useState({
     name: '',
     description: '',
-    image: null
+    image: null,
+    isPublic: true
   });
   const [imagePreview, setImagePreview] = useState('');
 
@@ -34,7 +35,8 @@ const PlaylistManagement = ({ playlistId, onClose }) => {
       setPlaylistDetails({
         name: currentPlaylist.name || '',
         description: currentPlaylist.description || '',
-        image: null
+        image: null,
+        isPublic: currentPlaylist.isPublic !== false // treat undefined as true
       });
       setIsLoading(false);
     } else {
@@ -52,7 +54,8 @@ const PlaylistManagement = ({ playlistId, onClose }) => {
         setPlaylistDetails({
           name: result.playlist.name || '',
           description: result.playlist.description || '',
-          image: null
+          image: null,
+          isPublic: result.playlist.isPublic !== false // treat undefined as true
         });
       } else {
         setError(result.message || 'Failed to load playlist');
@@ -141,6 +144,7 @@ const PlaylistManagement = ({ playlistId, onClose }) => {
       formData.append('id', playlistId);
       formData.append('name', playlistDetails.name);
       formData.append('description', playlistDetails.description);
+      formData.append('isPublic', playlistDetails.isPublic);
       formData.append('clerkId', user?.id || '');
 
       if (playlistDetails.image) {
@@ -168,20 +172,29 @@ const PlaylistManagement = ({ playlistId, onClose }) => {
 
   const handleDeletePlaylist = async () => {
     try {
+      console.log('Deleting playlist:', playlistId);
+      console.log('User ID:', user?.id || 'not available');
+
       const response = await axios.post(`${url}/api/playlist/delete`, {
         id: playlistId,
         clerkId: user?.id || ''
       });
 
+      console.log('Delete response:', response.data);
+
       if (response.data.success) {
+        console.log('Playlist deleted successfully, redirecting to home');
         // Navigate back to playlists page
         window.location.href = '/';
       } else {
+        console.error('Failed to delete playlist:', response.data.message);
         setError(response.data.message || 'Failed to delete playlist');
+        setShowDeleteConfirm(false); // Close the modal to show the error
       }
     } catch (error) {
       console.error('Error deleting playlist:', error);
-      setError('An unexpected error occurred');
+      setError('An unexpected error occurred: ' + (error.message || ''));
+      setShowDeleteConfirm(false); // Close the modal to show the error
     }
   };
 
@@ -377,6 +390,24 @@ const PlaylistManagement = ({ playlistId, onClose }) => {
                   rows="3"
                   placeholder="Add an optional description"
                 />
+              </div>
+
+              <div className="mb-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="isPublic"
+                    checked={playlistDetails.isPublic}
+                    onChange={(e) => setPlaylistDetails(prev => ({...prev, isPublic: e.target.checked}))}
+                    className="w-4 h-4"
+                  />
+                  <span>Make playlist public</span>
+                </label>
+                <p className="text-xs text-gray-400 mt-1 ml-6">
+                  {playlistDetails.isPublic
+                    ? "Public playlists can be seen by everyone and anyone can add songs."
+                    : "Private playlists are only visible to you and only you can add songs."}
+                </p>
               </div>
 
               <div className="mb-6">

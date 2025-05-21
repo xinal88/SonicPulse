@@ -37,6 +37,8 @@ const Player = () => {
         toggleBrowserFullscreen,
         showQueue,
         toggleQueue,
+        showSelectPlaylist,
+        setShowSelectPlaylist,
         registerSeekBar,
         unregisterSeekBar,
         registerSeekBg,
@@ -283,6 +285,14 @@ const Player = () => {
                     alt="Fullscreen"
                     title={showFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                     style={showFullscreen ? { filter: 'invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(90%) contrast(95%)' } : {}}
+                />
+                <img
+                    onClick={() => setShowSelectPlaylist(true)}
+                    className='w-4 cursor-pointer'
+                    src={assets.plus_icon}
+                    alt="Select Playlist"
+                    title="Select a Playlist"
+                    style={showSelectPlaylist ? { filter: 'invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(90%) contrast(95%)' } : {}}
                 />
             </div>
         </div>

@@ -509,7 +509,7 @@ const removeSongFromPlaylist = async (req, res) => {
             });
         }
 
-        // Check if the user is the creator
+        // Check if the user exists
         const user = await User.findOne({ clerkId });
         if (!user) {
             console.log(`User not found with clerkId: ${clerkId}`);
@@ -519,11 +519,21 @@ const removeSongFromPlaylist = async (req, res) => {
             });
         }
 
-        if (!playlist.creator.equals(user._id)) {
-            console.log(`User ${clerkId} is not the creator of playlist ${playlistId}`);
+        // Check if the playlist is private (explicitly set to false)
+        const isPrivate = playlist.isPublic === false;
+
+        // Check if the user is the creator
+        const isCreator = user._id.toString() === playlist.creator.toString();
+
+        console.log(`Is private playlist: ${isPrivate}`);
+        console.log(`Is creator: ${isCreator}`);
+
+        // If the playlist is private and the user is not the creator, don't allow removing songs
+        if (isPrivate && !isCreator) {
+            console.log(`User ${clerkId} cannot remove songs from private playlist ${playlistId} they don't own`);
             return res.json({
                 success: false,
-                message: "You don't have permission to modify this playlist"
+                message: "You cannot modify private playlists you don't own."
             });
         }
 
@@ -602,7 +612,7 @@ const reorderSongs = async (req, res) => {
             });
         }
 
-        // Check if the user is the creator
+        // Check if the user exists
         const user = await User.findOne({ clerkId });
         if (!user) {
             console.log(`User not found with clerkId: ${clerkId}`);
@@ -612,11 +622,21 @@ const reorderSongs = async (req, res) => {
             });
         }
 
-        if (!playlist.creator.equals(user._id)) {
-            console.log(`User ${clerkId} is not the creator of playlist ${playlistId}`);
+        // Check if the playlist is private (explicitly set to false)
+        const isPrivate = playlist.isPublic === false;
+
+        // Check if the user is the creator
+        const isCreator = user._id.toString() === playlist.creator.toString();
+
+        console.log(`Is private playlist: ${isPrivate}`);
+        console.log(`Is creator: ${isCreator}`);
+
+        // If the playlist is private and the user is not the creator, don't allow reordering songs
+        if (isPrivate && !isCreator) {
+            console.log(`User ${clerkId} cannot reorder songs in private playlist ${playlistId} they don't own`);
             return res.json({
                 success: false,
-                message: "You don't have permission to modify this playlist"
+                message: "You cannot modify private playlists you don't own."
             });
         }
 

@@ -2,6 +2,7 @@
 import { createContext, useEffect, useRef, useState, useCallback } from "react";
 import axios from 'axios';
 import { fetchAndParseLRC } from "../utils/lrcParser";
+import { useUser } from '@clerk/clerk-react';
 
 export const PlayerContext = createContext();
 
@@ -12,6 +13,7 @@ const LOOP_MODE = {
 };
 
 const PlayerContextProvider = (props) => {
+    const { user, isSignedIn } = useUser();
     const audioRef = useRef(new Audio()); // Initialize with a new Audio object
     const seekBg = useRef();
     const seekBar = useRef();
@@ -53,6 +55,7 @@ const PlayerContextProvider = (props) => {
     const [showFullscreen, setShowFullscreen] = useState(false);
     const [isFullscreenMode, setIsFullscreenMode] = useState(false);
     const [showQueue, setShowQueue] = useState(false);
+    const [showSelectPlaylist, setShowSelectPlaylist] = useState(false);
 
     const [currentLyricsSource, setCurrentLyricsSource] = useState('');
 
@@ -165,49 +168,55 @@ const PlayerContextProvider = (props) => {
                     // Store the public playlists
                     const publicPlaylists = response.data.playlists;
 
-                    // Try to get the current user's ID from localStorage (if they're logged in)
-                    const userSession = localStorage.getItem('clerk-user-session');
-                    let clerkId = null;
-
-                    if (userSession) {
+                    // If user is signed in, fetch their private playlists
+                    if (isSignedIn && user) {
                         try {
-                            const sessionData = JSON.parse(userSession);
-                            if (sessionData && sessionData.lastActiveSessionId) {
-                                clerkId = sessionData.lastActiveSessionId;
-                                console.log("Found user session, fetching user's private playlists");
+                            const clerkId = user.id;
+                            console.log(`User is signed in with ID: ${clerkId}, fetching user's private playlists`);
 
-                                // Get user's private playlists
-                                const userResponse = await axios.get(`${url}/api/playlist/list`, {
-                                    params: {
-                                        clerkId,
-                                        includePrivate: 'true'
+                            // Get user's private playlists
+                            const userResponse = await axios.get(`${url}/api/playlist/list`, {
+                                params: {
+                                    clerkId,
+                                    includePrivate: 'true'
+                                }
+                            });
+
+                            if (userResponse.data.success) {
+                                console.log(`Fetched ${userResponse.data.playlists.length} user playlists`);
+
+                                // Use a Map to ensure we have only one instance of each playlist
+                                const playlistMap = new Map();
+
+                                // Add public playlists to the map
+                                publicPlaylists.forEach(playlist => {
+                                    if (playlist._id) {
+                                        playlistMap.set(playlist._id, playlist);
                                     }
                                 });
 
-                                if (userResponse.data.success) {
-                                    console.log(`Fetched ${userResponse.data.playlists.length} user playlists`);
+                                // Add user playlists to the map (will overwrite any duplicates)
+                                userResponse.data.playlists.forEach(playlist => {
+                                    if (playlist._id) {
+                                        playlistMap.set(playlist._id, playlist);
+                                    }
+                                });
 
-                                    // Combine public and user playlists, removing duplicates
-                                    const allPlaylists = [...publicPlaylists];
+                                // Convert the map values back to an array
+                                const allPlaylists = Array.from(playlistMap.values());
 
-                                    // Add user playlists that aren't already in the public list
-                                    userResponse.data.playlists.forEach(userPlaylist => {
-                                        if (!allPlaylists.some(p => p._id === userPlaylist._id)) {
-                                            allPlaylists.push(userPlaylist);
-                                        }
-                                    });
-
-                                    console.log(`Combined total: ${allPlaylists.length} playlists`);
-                                    setPlaylistsData(allPlaylists);
-                                    return;
-                                }
+                                console.log(`Combined total: ${allPlaylists.length} playlists`);
+                                setPlaylistsData(allPlaylists);
+                                return;
                             }
-                        } catch (parseError) {
-                            console.error("Error parsing user session:", parseError);
+                        } catch (error) {
+                            console.error("Error fetching user playlists:", error);
                         }
+                    } else {
+                        console.log("User is not signed in, only showing public playlists");
                     }
 
-                    // If we couldn't get user playlists, just use the public ones
+                    // If user is not signed in or we couldn't get user playlists, just use the public ones
                     setPlaylistsData(publicPlaylists);
                 } else {
                     console.error("Failed to fetch playlists:", response.data.message);
@@ -222,7 +231,7 @@ const PlayerContextProvider = (props) => {
         getAlbums();
         getArtists();
         getPlaylists();
-    }, [url]);
+    }, [url, isSignedIn, user]);
 
     // Fetch genres data and select random genres with songs
     useEffect(() => {
@@ -623,13 +632,17 @@ const PlayerContextProvider = (props) => {
     // Playlist related functions
     const createPlaylist = async (playlistData, imageFile) => {
         try {
+            if (!isSignedIn || !user) {
+                return { success: false, message: "You must be signed in to create a playlist" };
+            }
+
             console.log("Creating new playlist:", playlistData.name);
 
             const formData = new FormData();
             formData.append('name', playlistData.name);
             formData.append('description', playlistData.description || '');
             formData.append('isPublic', playlistData.isPublic !== undefined ? playlistData.isPublic : true);
-            formData.append('clerkId', playlistData.clerkId);
+            formData.append('clerkId', user.id); // Use the current user's ID directly
 
             if (imageFile) {
                 formData.append('image', imageFile);
@@ -649,7 +662,7 @@ const PlayerContextProvider = (props) => {
                     // Include private playlists in the refresh to ensure we see the newly created playlist
                     const playlistsResponse = await axios.get(`${url}/api/playlist/list`, {
                         params: {
-                            clerkId: playlistData.clerkId,
+                            clerkId: user.id,
                             includePrivate: 'true'
                         }
                     });
@@ -679,10 +692,13 @@ const PlayerContextProvider = (props) => {
                 return { success: false, message: "Playlist ID is required" };
             }
 
-            console.log(`Fetching playlist from API: ${playlistId}, clerkId: ${clerkId || 'none'}`);
+            // Use provided clerkId or current user's ID if signed in
+            const userClerkId = clerkId || (isSignedIn && user ? user.id : null);
+
+            console.log(`Fetching playlist from API: ${playlistId}, clerkId: ${userClerkId || 'none'}`);
 
             const response = await axios.get(`${url}/api/playlist/get`, {
-                params: { id: playlistId, clerkId }
+                params: { id: playlistId, clerkId: userClerkId }
             });
 
             if (response.data.success) {
@@ -730,7 +746,10 @@ const PlayerContextProvider = (props) => {
                 return { success: true, playlist: currentPlaylist };
             }
 
-            const result = await getPlaylist(playlistId, clerkId);
+            // Use provided clerkId or current user's ID if signed in
+            const userClerkId = clerkId || (isSignedIn && user ? user.id : null);
+
+            const result = await getPlaylist(playlistId, userClerkId);
 
             if (result.success) {
                 console.log(`Successfully loaded playlist with ${result.playlist.songs.length} songs`);
@@ -760,7 +779,10 @@ const PlayerContextProvider = (props) => {
                 return { success: false, message: "Invalid playlist ID" };
             }
 
-            const result = await loadPlaylist(playlistId, clerkId);
+            // Use provided clerkId or current user's ID if signed in
+            const userClerkId = clerkId || (isSignedIn && user ? user.id : null);
+
+            const result = await loadPlaylist(playlistId, userClerkId);
 
             if (!result.success) {
                 console.error(`Failed to load playlist: ${result.message}`);
@@ -801,21 +823,24 @@ const PlayerContextProvider = (props) => {
 
     const addSongToPlaylist = async (playlistId, songId, clerkId) => {
         try {
-            console.log(`Adding song ${songId} to playlist ${playlistId} with user ${clerkId}`);
+            // Use provided clerkId or current user's ID if signed in
+            const userClerkId = clerkId || (isSignedIn && user ? user.id : null);
+
+            console.log(`Adding song ${songId} to playlist ${playlistId} with user ${userClerkId}`);
 
             // Make sure we have all required parameters
-            if (!playlistId || !songId || !clerkId) {
-                console.error("Missing required parameters:", { playlistId, songId, clerkId });
+            if (!playlistId || !songId || !userClerkId) {
+                console.error("Missing required parameters:", { playlistId, songId, userClerkId });
                 return {
                     success: false,
-                    message: "Missing required parameters for adding song to playlist"
+                    message: "You must be signed in to add songs to a playlist"
                 };
             }
 
             const response = await axios.post(`${url}/api/playlist/add-song`, {
                 playlistId,
                 songId,
-                clerkId
+                clerkId: userClerkId
             });
 
             if (response.data.success) {
@@ -841,7 +866,7 @@ const PlayerContextProvider = (props) => {
                     } else {
                         // If we can't find the song locally, do a full refresh
                         console.log("Song not found locally, doing a full refresh");
-                        const refreshResult = await loadPlaylist(playlistId, clerkId);
+                        const refreshResult = await loadPlaylist(playlistId, userClerkId);
                         if (!refreshResult.success) {
                             console.error("Failed to refresh playlist after adding song");
                         }
@@ -861,12 +886,22 @@ const PlayerContextProvider = (props) => {
 
     const removeSongFromPlaylist = async (playlistId, songId, clerkId) => {
         try {
+            // Use provided clerkId or current user's ID if signed in
+            const userClerkId = clerkId || (isSignedIn && user ? user.id : null);
+
             console.log(`Removing song ${songId} from playlist ${playlistId}`);
+
+            if (!userClerkId) {
+                return {
+                    success: false,
+                    message: "You must be signed in to remove songs from a playlist"
+                };
+            }
 
             const response = await axios.post(`${url}/api/playlist/remove-song`, {
                 playlistId,
                 songId,
-                clerkId
+                clerkId: userClerkId
             });
 
             if (response.data.success) {
@@ -898,12 +933,22 @@ const PlayerContextProvider = (props) => {
 
     const reorderSongs = async (playlistId, songIds, clerkId) => {
         try {
+            // Use provided clerkId or current user's ID if signed in
+            const userClerkId = clerkId || (isSignedIn && user ? user.id : null);
+
             console.log(`Reordering songs in playlist ${playlistId}`);
+
+            if (!userClerkId) {
+                return {
+                    success: false,
+                    message: "You must be signed in to reorder songs in a playlist"
+                };
+            }
 
             const response = await axios.post(`${url}/api/playlist/reorder-songs`, {
                 playlistId,
                 songIds,
-                clerkId
+                clerkId: userClerkId
             });
 
             if (response.data.success) {
@@ -981,6 +1026,9 @@ const PlayerContextProvider = (props) => {
         showQueue,
         setShowQueue,
         toggleQueue,
+        // Select Playlist Modal
+        showSelectPlaylist,
+        setShowSelectPlaylist,
         // Seekbar and SeekBg registration
         registerSeekBar,
         unregisterSeekBar,

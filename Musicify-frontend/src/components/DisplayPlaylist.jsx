@@ -343,10 +343,9 @@ const DisplayPlaylist = () => {
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
           <div className="bg-[#282828] p-6 rounded-md w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Manage Playlist</h2>
               <button
                 onClick={() => setShowManagePlaylist(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white ml-auto"
               >
                 ✕
               </button>

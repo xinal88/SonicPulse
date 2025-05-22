@@ -22,6 +22,13 @@ export const extractSpotifyTrackId = (url) => {
     return matches ? matches[1] : null;
 };
 
+// Helper function to format duration
+const formatDuration = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
 export const getSpotifyTrackInfo = async (trackId) => {
     try {
         await refreshSpotifyToken();
@@ -30,7 +37,7 @@ export const getSpotifyTrackInfo = async (trackId) => {
             name: track.body.name,
             artists: track.body.artists.map(artist => artist.name),
             image: track.body.album.images[0]?.url,
-            duration: Math.floor(track.body.duration_ms / 1000)
+            duration: formatDuration(track.body.duration_ms / 1000)
         };
     } catch (error) {
         console.error('Error getting Spotify track info:', error);
@@ -121,7 +128,7 @@ export const findAndDownloadYoutubeAudio = async (searchQuery) => {
 
         return {
             path: tempFilePath,
-            duration: Math.floor(info.videoDetails.lengthSeconds)
+            duration: formatDuration(info.videoDetails.lengthSeconds)
         };
     } catch (error) {
         // Clean up temp file if it exists and there was an error

@@ -1,7 +1,24 @@
 @import "tailwindcss";
 
+/* Change from hiding all scrollbars to only hiding them by default */
 ::-webkit-scrollbar {
   display: none;
+}
+
+/* Add specific styling for scrollbars in the Shazam results */
+.max-h-60.overflow-y-auto::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.max-h-60.overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: #4b5563; /* gray-600 */
+  border-radius: 3px;
+}
+
+.max-h-60.overflow-y-auto::-webkit-scrollbar-track {
+  background-color: #1f2937; /* gray-800 */
+  border-radius: 3px;
 }
 
 /* Custom styling for the volume slider */

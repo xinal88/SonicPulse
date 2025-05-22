@@ -1,86 +1,161 @@
-import mongoose from 'mongoose';
 import songModel from '../models/songModel.js';
 import artistModel from '../models/artistModel.js';
 import albumModel from '../models/albumModel.js';
 import genreModel from '../models/genreModel.js';
 import fs from 'fs/promises';
-import axios from 'axios';
-import ytdl from 'ytdl-core';
 import { generateFingerprint, matchFingerprints } from '../utils/fingerprinting.js';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import { convertToArray, handleNewGenres, getArtistNames } from '../utils/songUtils.js';
 import { uploadAudioFile, uploadImageFile, uploadLrcFile } from '../utils/uploadUtils.js';
 import { executeTransaction } from '../utils/transactionUtils.js';
+import { extractSpotifyTrackId, getSpotifyTrackInfo, findAndDownloadYoutubeAudio, findYouTubeId } from '../utils/streamingUtils.js';
 
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const addSong = async (req, res) => {
     try {
-        const name = req.body.name;
-        const artistIds = convertToArray(req.body.artists) || convertToArray(req.body.artist);
-        const album = req.body.album;
-        
-        // Process genres
-        let genres = convertToArray(req.body.genres);
-        const newGenres = await handleNewGenres(req.body.newGenres);
-        genres = [...new Set([...genres, ...newGenres])];
+        let songData = {};
+        let audioFile;
+        let tempFilePath = null;  // Add tempFilePath to outer scope
 
-        // Upload files
-        const audioFile = req.files.audio[0];
-        const { fileUrl: audioUrl, duration } = await uploadAudioFile(audioFile);
-
-        // Handle image upload
-        let imageUrl = "";
-        if (req.body.useAlbumImage === 'true' && req.body.albumId) {
-            const albumData = await albumModel.findById(req.body.albumId);
-            if (albumData?.image) {
-                imageUrl = albumData.image;
-            } else {
-                return res.json({success: false, message: "Album image not found"});
+        // Handle Spotify URL
+        if (req.body.spotifyUrl) {
+            const trackId = extractSpotifyTrackId(req.body.spotifyUrl);
+            if (!trackId) {
+                return res.json({success: false, message: "Invalid Spotify URL"});
             }
-        } else if (req.files.image?.[0]) {
-            imageUrl = await uploadImageFile(req.files.image[0]);
+
+            try {
+                const trackInfo = await getSpotifyTrackInfo(trackId);
+                const album = req.body.album || 'none';  // Get album from request or default to 'none'
+                
+                // Find or create artists
+                const artistPromises = trackInfo.artists.map(async (artistName) => {
+                    let artist = await artistModel.findOne({ name: { $regex: new RegExp(`^${artistName}$`, 'i') } });
+                    if (!artist) {
+                        artist = await artistModel.create({ name: artistName });
+                    }
+                    return artist._id;
+                });
+                
+                const artistIds = await Promise.all(artistPromises);
+                const { artistName } = await getArtistNames(artistIds);
+
+                // Download audio from YouTube
+                // Format search query
+                const searchQuery = `${trackInfo.name} ${trackInfo.artists[0]}`;
+                console.log("Using search query:", searchQuery);
+                
+                const downloadResult = await findAndDownloadYoutubeAudio(searchQuery);
+                tempFilePath = downloadResult.path;  // Store in outer scope variable
+                const duration = downloadResult.duration;
+                audioFile = {
+                    path: tempFilePath,
+                    mimetype: 'audio/mpeg'
+                };
+                
+                // Process genres (if provided)
+                let genres = convertToArray(req.body.genres);
+                const newGenres = await handleNewGenres(req.body.newGenres);
+                genres = [...new Set([...genres, ...newGenres])];
+
+                // Create song data
+                songData = {
+                    name: trackInfo.name,
+                    artist: artistIds,
+                    artistName,
+                    album,  // Use album from form data
+                    image: trackInfo.image,
+                    duration,
+                    genres,
+                    fingerprints: []
+                };
+
+                // Upload the audio file
+                const { fileUrl: audioUrl } = await uploadAudioFile(audioFile);
+                songData.file = audioUrl;
+
+                // Cleanup will happen after fingerprint generation
+            } catch (error) {
+                console.error("Error processing Spotify track:", error);
+                // Clean up temp file on error
+                if (tempFilePath) {
+                    try {
+                        await fs.unlink(tempFilePath);
+                    } catch (cleanupError) {
+                        console.error("Error cleaning up temp file:", cleanupError);
+                    }
+                }
+                return res.json({success: false, message: "Error processing Spotify track"});
+            }
         } else {
-            return res.json({success: false, message: "Image is required"});
+            // Handle regular upload
+            const name = req.body.name;
+            const artistIds = convertToArray(req.body.artists) || convertToArray(req.body.artist);
+            const album = req.body.album;
+            
+            // Process genres
+            let genres = convertToArray(req.body.genres);
+            const newGenres = await handleNewGenres(req.body.newGenres);
+            genres = [...new Set([...genres, ...newGenres])];
+
+            // Upload files
+            if (!req.files?.audio?.[0]) {
+                return res.json({success: false, message: "Audio file is required"});
+            }
+            audioFile = req.files.audio[0];
+            const { fileUrl: audioUrl, duration } = await uploadAudioFile(audioFile);
+
+            // Handle image upload for YouTube URL option (only when not using Spotify URL)
+            let imageUrl = "";
+            if (!req.body.spotifyUrl) {  // Only handle image if not using Spotify URL
+                if (req.body.useAlbumImage === 'true' && req.body.albumId) {
+                    const albumData = await albumModel.findById(req.body.albumId);
+                    if (albumData?.image) {
+                        imageUrl = albumData.image;
+                    } else {
+                        return res.json({success: false, message: "Album image not found"});
+                    }
+                } else if (req.files.image?.[0]) {
+                    imageUrl = await uploadImageFile(req.files.image[0]);
+                } else {
+                    return res.json({success: false, message: "Image is required for YouTube URL"});
+                }
+            }
+
+            // Handle LRC file upload
+            const lrcFileUrl = req.files.lrc?.[0] ? await uploadLrcFile(req.files.lrc[0]) : "";
+
+            // Get artist names
+            const { artistName } = await getArtistNames(artistIds);
+
+            songData = {
+                name,
+                artist: artistIds,
+                artistName,
+                album,
+                image: req.body.spotifyUrl ? songData.image : imageUrl,  // Use Spotify image or uploaded image
+                file: audioUrl,
+                duration,
+                lrcFile: lrcFileUrl,
+                genres,
+                fingerprints: []
+            };
         }
 
-        // Handle LRC file upload
-        const lrcFileUrl = req.files.lrc?.[0] ? await uploadLrcFile(req.files.lrc[0]) : "";
-
-        // Get artist names
-        const { artistName } = await getArtistNames(artistIds);
-
-        const songData = {
-            name,
-            artist: artistIds,
-            artistName,
-            album,
-            image: imageUrl,
-            file: audioUrl,
-            duration,
-            lrcFile: lrcFileUrl,
-            genres,
-            fingerprints: []
-        };
-
-        // Handle YouTube URL and fingerprinting
-        if (req.body.youtubeUrl && ytdl.validateURL(req.body.youtubeUrl)) {
-            const videoId = ytdl.getURLVideoID(req.body.youtubeUrl);
-            songData.youtubeId = videoId;
-            songData.youtubeUrl = req.body.youtubeUrl;
-
-            if (req.body.generateFingerprint === 'true') {
-                try {
-                    const audioData = await fs.readFile(audioFile.path);
-                    const audioDecode = (await import('audio-decode')).default;
-                    const decodedAudio = await audioDecode(audioData);
-                    const samples = decodedAudio.getChannelData(0);
-                    songData.fingerprints = generateFingerprint(samples);
-                } catch (error) {
-                    console.error("Error generating fingerprints:", error);
-                }
+        // Handle fingerprinting
+        if (audioFile && req.body.generateFingerprint === 'true') {
+            try {
+                const audioData = await fs.readFile(audioFile.path);
+                const audioDecode = (await import('audio-decode')).default;
+                const decodedAudio = await audioDecode(audioData);
+                const samples = decodedAudio.getChannelData(0);
+                songData.fingerprints = generateFingerprint(samples);
+                console.log(`Generated ${songData.fingerprints.length} fingerprints`);
+            } catch (error) {
+                console.error("Error generating fingerprints:", error);
             }
         }
 
@@ -88,9 +163,10 @@ const addSong = async (req, res) => {
             const song = new songModel(songData);
             const savedSong = await song.save({ session });
 
-            if (genres.length > 0) {
+            // Use songData.genres instead of genres
+            if (songData.genres?.length > 0) {
                 // Update genres
-                await Promise.all(genres.map(genreId =>
+                await Promise.all(songData.genres.map(genreId =>
                     genreModel.findByIdAndUpdate(
                         genreId,
                         {
@@ -102,13 +178,13 @@ const addSong = async (req, res) => {
                 ));
 
                 // Update artists' genres
-                if (artistIds.length > 0) {
-                    await Promise.all(artistIds.map(async artistId => {
+                if (songData.artist?.length > 0) {
+                    await Promise.all(songData.artist.map(async artistId => {
                         const artist = await artistModel.findById(artistId).session(session);
                         if (artist) {
                             const uniqueGenres = new Set([
                                 ...(artist.genres || []).map(g => g.toString()),
-                                ...genres
+                                ...songData.genres
                             ]);
                             await artistModel.findByIdAndUpdate(
                                 artistId,
@@ -120,6 +196,16 @@ const addSong = async (req, res) => {
                 }
             }
         });
+
+        // Clean up temp file if it exists (from Spotify/YouTube download)
+        if (tempFilePath) {
+            try {
+                await fs.unlink(tempFilePath);
+                console.log('Cleaned up temporary file after fingerprint generation and database transaction');
+            } catch (cleanupError) {
+                console.error('Error cleaning up temporary file:', cleanupError);
+            }
+        }
 
         res.json({success: true, message: "Song Added"});
     } catch (error) {
@@ -253,9 +339,23 @@ const updateSong = async (req, res) => {
                 updateData.image = await uploadImageFile(req.files.image[0]);
             }
             if (req.files.audio?.[0]) {
-                const { fileUrl, duration } = await uploadAudioFile(req.files.audio[0]);
+                // Store audio file reference for fingerprint generation
+                const audioFile = req.files.audio[0];
+                const { fileUrl, duration } = await uploadAudioFile(audioFile);
                 updateData.file = fileUrl;
                 updateData.duration = duration;
+
+                // Generate new fingerprints for the updated audio
+                try {
+                    const audioData = await fs.readFile(audioFile.path);
+                    const audioDecode = (await import('audio-decode')).default;
+                    const decodedAudio = await audioDecode(audioData);
+                    const samples = decodedAudio.getChannelData(0);
+                    updateData.fingerprints = generateFingerprint(samples);
+                    console.log(`Generated ${updateData.fingerprints.length} fingerprints for updated audio`);
+                } catch (error) {
+                    console.error("Error generating fingerprints for updated audio:", error);
+                }
             }
             if (req.files.lrc?.[0]) {
                 updateData.lrcFile = await uploadLrcFile(req.files.lrc[0]);
@@ -690,33 +790,6 @@ const downloadSong = async (req, res) => {
             message: 'Error processing YouTube URL',
             error: error.message || 'Unknown error'
         });
-    }
-};
-
-const findYouTubeId = async (searchQuery) => {
-    try {
-        const API_KEY = process.env.YOUTUBE_API_KEY;
-        if (!API_KEY) {
-            console.warn('YouTube API key not found in environment variables');
-            return null;
-        }
-        
-        const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
-            params: {
-                part: 'snippet',
-                maxResults: 1,
-                q: searchQuery,
-                key: API_KEY
-            }
-        });
-        
-        if (response.data.items?.[0]) {
-            return response.data.items[0].id.videoId;
-        }
-        return null;
-    } catch (error) {
-        console.error('YouTube API error:', error);
-        return null;
     }
 };
 

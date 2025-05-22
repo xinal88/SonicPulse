@@ -1,5 +1,6 @@
 // Musicify-frontend/src/App.jsx
 import { useContext, useState, useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import { PlayerContext } from './context/PlayerContext';
 import Sidebar from './components/Sidebar';
 import Display from './components/Display';
@@ -8,6 +9,7 @@ import NowPlaying from './components/NowPlaying';
 import NowPlayingSidebar from './components/NowPlayingSidebar';
 import QueueSidebar from './components/QueueSidebar';
 import ErrorBoundary from './components/ErrorBoundary';
+import Search from './components/Search';
 
 const App = () => {
   const {audioRef, track, songsData, showNowPlaying, showFullscreen, showQueue} = useContext(PlayerContext);
@@ -83,7 +85,11 @@ const App = () => {
             <div className='h-[90%] flex'>
               <Sidebar />
               <ErrorBoundary>
-                <Display />
+                <Routes>
+                  <Route path="/" element={<Display />} />
+                  <Route path="/search" element={<Search />} />
+                  <Route path="*" element={<Display />} />
+                </Routes>
               </ErrorBoundary>
               {showNowPlaying && <NowPlayingSidebar />}
               {showQueue && <QueueSidebar />}

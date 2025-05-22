@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { PlayerContext } from '../context/PlayerContext';
 import ErrorBoundary from './ErrorBoundary';
@@ -12,23 +12,17 @@ const Search = () => {
   const [error, setError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
   const navigate = useNavigate();
-  const { 
-    songsData, 
-    playWithId, 
-    showLyrics, 
+  const location = useLocation();
+  const {
+    songsData,
+    playWithId,
+    showLyrics,
     setShowLyrics
   } = useContext(PlayerContext);
 
-  useEffect(() => {
-    document.title = "Search - Musicify";
-    if (setShowLyrics && showLyrics) {
-      setShowLyrics(false);
-    }
-  }, []);
-
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchTerm.trim()) return;
+  // Define performSearch function before using it in useEffect
+  const performSearch = async (term) => {
+    if (!term.trim()) return;
 
     if (showLyrics && setShowLyrics) {
       setShowLyrics(false);
@@ -37,14 +31,14 @@ const Search = () => {
     setLoading(true);
     setError(null); // Clear any previous errors
     setHasSearched(true);
-    
+
     try {
       // Create an array to hold all search results
       let results = [];
-      
+
       // Search for songs via API
       try {
-        const songResponse = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/search?q=${encodeURIComponent(searchTerm)}`);
+        const songResponse = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/search?q=${encodeURIComponent(term)}`);
         if (songResponse.data && songResponse.data.results) {
           results = [...songResponse.data.results];
         }
@@ -52,10 +46,10 @@ const Search = () => {
         console.error('Song search error:', songErr);
         // Continue with other searches even if song search fails
       }
-      
+
       // Search for albums via API
       try {
-        const albumResponse = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/album/list?search=${encodeURIComponent(searchTerm)}`);
+        const albumResponse = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/album/list?search=${encodeURIComponent(term)}`);
         if (albumResponse.data && albumResponse.data.success && albumResponse.data.albums) {
           // Format album results to match our result structure
           const albumResults = albumResponse.data.albums.map(album => ({
@@ -66,7 +60,7 @@ const Search = () => {
             image: album.image || 'https://via.placeholder.com/150?text=Album',
             desc: album.desc
           }));
-          
+
           // Add albums to results
           results = [...results, ...albumResults];
         }
@@ -74,20 +68,20 @@ const Search = () => {
         console.error('Album search error:', albumErr);
         // Continue with other searches even if album search fails
       }
-      
+
       // Also search locally in the loaded data for songs
       if (songsData && songsData.length > 0) {
         // Filter songs by name, artist or album
-        const filteredSongs = songsData.filter(song => 
-          (song.name && song.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (song.artistName && song.artistName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (song.album && song.album.toLowerCase().includes(searchTerm.toLowerCase()))
+        const filteredSongs = songsData.filter(song =>
+          (song.name && song.name.toLowerCase().includes(term.toLowerCase())) ||
+          (song.artistName && song.artistName.toLowerCase().includes(term.toLowerCase())) ||
+          (song.album && song.album.toLowerCase().includes(term.toLowerCase()))
         );
-        
+
         // Add local songs to results if they're not already included
         if (filteredSongs.length > 0) {
           const existingIds = new Set(results.map(item => item._id));
-          
+
           filteredSongs.forEach(item => {
             if (!existingIds.has(item._id)) {
               results.push({
@@ -102,21 +96,21 @@ const Search = () => {
           });
         }
       }
-      
+
       setSearchResults(results);
     } catch (err) {
       console.error('Search error:', err);
       // Don't set error message to avoid showing the red box
       // setError('Failed to perform search. Please try again.');
-      
+
       // Fallback to local search only if API fails
       if (songsData && songsData.length > 0) {
-        const filteredSongs = songsData.filter(song => 
-          (song.name && song.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (song.artistName && song.artistName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (song.album && song.album.toLowerCase().includes(searchTerm.toLowerCase()))
+        const filteredSongs = songsData.filter(song =>
+          (song.name && song.name.toLowerCase().includes(term.toLowerCase())) ||
+          (song.artistName && song.artistName.toLowerCase().includes(term.toLowerCase())) ||
+          (song.album && song.album.toLowerCase().includes(term.toLowerCase()))
         );
-        
+
         const formattedResults = filteredSongs.map(item => ({
           _id: item._id,
           title: item.name || item.title,
@@ -125,7 +119,7 @@ const Search = () => {
           image: item.image,
           file: item.file
         }));
-        
+
         setSearchResults(formattedResults);
       }
     } finally {
@@ -133,13 +127,28 @@ const Search = () => {
     }
   };
 
+  useEffect(() => {
+    document.title = "Search - Musicify";
+    if (setShowLyrics && showLyrics) {
+      setShowLyrics(false);
+    }
+
+    // Check for search query in URL
+    const queryParams = new URLSearchParams(location.search);
+    const queryTerm = queryParams.get('q');
+    if (queryTerm) {
+      setSearchTerm(queryTerm);
+      performSearch(queryTerm);
+    }
+  }, [location.search, setShowLyrics, showLyrics]);
+
   const handleResultClick = (item) => {
     try {
       if (item.type === 'song') {
         if (setShowLyrics && showLyrics) {
           setShowLyrics(false);
         }
-        
+
         setTimeout(() => {
           if (playWithId) {
             playWithId(item._id);
@@ -163,8 +172,8 @@ const Search = () => {
         {showLyrics ? (
           <div className="h-full">
             <div className="mb-4">
-              <div 
-                className="flex items-center py-4 cursor-pointer" 
+              <div
+                className="flex items-center py-4 cursor-pointer"
                 onClick={() => setShowLyrics(false)}
               >
                 <span className="text-2xl mr-3">&lt;</span>
@@ -177,26 +186,8 @@ const Search = () => {
           </div>
         ) : (
           <>
-            <h1 className="text-2xl font-bold mb-6">Search</h1>
-            
-            <div className="mb-6">
-              <form onSubmit={handleSearch} className="flex">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="What do you want to listen to?"
-                  className="flex-grow p-3 rounded-l bg-[#242424] text-white border-none focus:outline-none"
-                />
-                <button 
-                  type="submit" 
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-r"
-                >
-                  Search
-                </button>
-              </form>
-            </div>
-            
+            <h1 className="text-2xl font-bold mb-6">Search Results</h1>
+
             {loading ? (
               <div className="text-center py-4">
                 <p>Searching...</p>
@@ -205,34 +196,33 @@ const Search = () => {
               hasSearched && searchResults.length > 0 && (
                 <div>
                   <h2 className="text-xl font-bold mb-4">Results</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="flex flex-wrap gap-4">
                     {searchResults.map((item) => (
-                      <div 
-                        key={item._id} 
-                        className="bg-[#181818] hover:bg-[#282828] p-4 rounded cursor-pointer transition-colors"
+                      <div
+                        key={item._id}
+                        className="min-w-[180px] w-[180px] p-2 px-3 rounded cursor-pointer hover:bg-[#ffffff26]"
                         onClick={() => handleResultClick(item)}
                       >
-                        {item.image && (
-                          <img 
-                            src={item.image} 
-                            alt={item.title} 
-                            className="w-full h-40 object-cover rounded mb-2"
+                        <div className="w-full h-[180px] overflow-hidden">
+                          <img
+                            src={item.image}
+                            alt={item.title}
+                            className="rounded w-full h-full object-cover"
                             onError={(e) => {
                               e.target.onerror = null;
                               e.target.src = 'https://via.placeholder.com/150?text=No+Image';
                             }}
                           />
-                        )}
-                        <div className="font-bold text-lg">{item.title}</div>
-                        {item.artist && <div className="text-gray-400">{item.artist}</div>}
-                        <div className="text-xs text-gray-500 capitalize mt-2">{item.type}</div>
+                        </div>
+                        <p className="font-bold mt-2 mb-1 truncate">{item.title}</p>
+                        <p className="text-slate-200 text-sm truncate">{item.artist || (item.type === 'album' ? 'Album' : item.type === 'artist' ? 'Artist' : '')}</p>
                       </div>
                     ))}
                   </div>
                 </div>
               )
             )}
-            
+
             {!loading && hasSearched && searchResults.length === 0 && (
               <div className="text-center py-4">
                 <p>No results found for "{searchTerm}"</p>

@@ -3,6 +3,7 @@ import { createContext, useEffect, useRef, useState, useCallback } from "react";
 import axios from 'axios';
 import { fetchAndParseLRC } from "../utils/lrcParser";
 import { toast } from 'react-toastify';
+import { useUser } from '@clerk/clerk-react';
 
 export const PlayerContext = createContext();
 
@@ -13,6 +14,7 @@ const LOOP_MODE = {
 };
 
 const PlayerContextProvider = (props) => {
+    const { user, isSignedIn } = useUser();
     const audioRef = useRef(new Audio()); // Initialize with a new Audio object
     const seekBg = useRef();
     const seekBar = useRef();
@@ -28,6 +30,8 @@ const PlayerContextProvider = (props) => {
     const [artistsData, setArtistsData] = useState([]);
     const [genresData, setGenresData] = useState([]);
     const [randomGenres, setRandomGenres] = useState([]);
+    const [playlistsData, setPlaylistsData] = useState([]);
+    const [currentPlaylist, setCurrentPlaylist] = useState(null);
     const [track, setTrack] = useState(null);
     const [playStatus, setPlayStatus] = useState(false);
     const [time, setTime] = useState({
@@ -51,6 +55,7 @@ const PlayerContextProvider = (props) => {
     const [showFullscreen, setShowFullscreen] = useState(false);
     const [isFullscreenMode, setIsFullscreenMode] = useState(false);
     const [showQueue, setShowQueue] = useState(false);
+    const [showSelectPlaylist, setShowSelectPlaylist] = useState(false);
 
     const [currentLyricsSource, setCurrentLyricsSource] = useState('');
 
@@ -192,34 +197,50 @@ const PlayerContextProvider = (props) => {
         getGenres();
     }, [url]); // No longer dependent on songsData
 
+    // Fetch playlists data
+    useEffect(() => {
+        const getPlaylists = async () => {
+            try {
+                const response = await axios.get(`${url}/api/playlist/list`);
+                if (response.data.success) {
+                    setPlaylistsData(response.data.playlists);
+                }
+            } catch (error) {
+                console.error("Error fetching playlists:", error);
+            }
+        };
+
+        getPlaylists();
+    }, [url]);
+
     // Listen for messages from the Shazam popup
     useEffect(() => {
         const handleShazamMessage = (event) => {
             try {
                 // Verify the origin if needed
                 // if (event.origin !== 'http://localhost:3000') return;
-                
+
                 if (!event.data) return;
-                
+
                 if (event.data.type === 'SONG_IDENTIFIED' || event.data.type === 'SONG_SELECTED') {
                     const { song } = event.data;
-                    
+
                     // Validate song data
                     if (!song || (!song.title && !song.name)) {
                         console.warn('Invalid song data received:', song);
                         return;
                     }
-                    
+
                     // Try to find the song in our library
                     const songTitle = song.title || song.name;
                     const songArtist = song.artist || song.artistName;
-                    
+
                     // Look for a match by title and artist
-                    const matchingSong = songsData.find(s => 
-                        (s.name && songTitle && s.name.toLowerCase().includes(songTitle.toLowerCase())) || 
+                    const matchingSong = songsData.find(s =>
+                        (s.name && songTitle && s.name.toLowerCase().includes(songTitle.toLowerCase())) ||
                         (songArtist && s.artistName && s.artistName.toLowerCase().includes(songArtist.toLowerCase()))
                     );
-                    
+
                     if (matchingSong) {
                         // Play the matching song
                         setTrack(matchingSong);
@@ -228,7 +249,7 @@ const PlayerContextProvider = (props) => {
                     } else if (songTitle) {
                         // If no match found, show a message
                         toast.info(`Song "${songTitle}" ${songArtist ? `by ${songArtist}` : ''} not found in your library`);
-                        
+
                         // Optionally, you could open YouTube if youtubeId is available
                         if (song.youtubeId) {
                             window.open(`https://www.youtube.com/watch?v=${song.youtubeId}`, '_blank');
@@ -239,9 +260,9 @@ const PlayerContextProvider = (props) => {
                 console.error('Error handling Shazam message:', error);
             }
         };
-        
+
         window.addEventListener('message', handleShazamMessage);
-        
+
         return () => {
             window.removeEventListener('message', handleShazamMessage);
         };
@@ -605,6 +626,150 @@ const PlayerContextProvider = (props) => {
         setPlayOnLoad(true);
     };
 
+    // Playlist functions
+    const createPlaylist = async (playlistData, imageFile) => {
+        try {
+            const formData = new FormData();
+            formData.append('name', playlistData.name);
+            formData.append('description', playlistData.description || '');
+            formData.append('isPublic', playlistData.isPublic);
+            formData.append('clerkId', playlistData.clerkId);
+
+            if (imageFile) {
+                formData.append('image', imageFile);
+            }
+
+            const response = await axios.post(`${url}/api/playlist/create`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            if (response.data.success) {
+                // Refresh playlists data
+                const playlistsResponse = await axios.get(`${url}/api/playlist/list`);
+                if (playlistsResponse.data.success) {
+                    setPlaylistsData(playlistsResponse.data.playlists);
+                }
+                return { success: true, playlist: response.data.playlist };
+            } else {
+                return { success: false, message: response.data.message };
+            }
+        } catch (error) {
+            console.error('Error creating playlist:', error);
+            return { success: false, message: error.response?.data?.message || 'Failed to create playlist' };
+        }
+    };
+
+    const loadPlaylist = async (playlistId, clerkId = '') => {
+        try {
+            console.log(`[PlayerContext] Loading playlist ${playlistId}`);
+
+            const response = await axios.get(`${url}/api/playlist/get`, {
+                params: {
+                    id: playlistId,
+                    clerkId: clerkId
+                }
+            });
+
+            if (response.data.success) {
+                console.log(`[PlayerContext] Playlist loaded successfully`);
+                setCurrentPlaylist(response.data.playlist);
+                return { success: true, playlist: response.data.playlist };
+            } else {
+                console.error(`[PlayerContext] API returned error:`, response.data.message);
+                return { success: false, message: response.data.message };
+            }
+        } catch (error) {
+            console.error('[PlayerContext] Error loading playlist:', error.message);
+
+            if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+                return { success: false, message: 'Network connection failed. Please check if the backend server is running.' };
+            }
+
+            return { success: false, message: `Network error: ${error.message}` };
+        }
+    };
+
+    const addSongToPlaylist = async (playlistId, songId, clerkId = '') => {
+        try {
+            const response = await axios.post(`${url}/api/playlist/add-song`, {
+                playlistId: playlistId,
+                songId: songId,
+                clerkId: clerkId
+            });
+
+            if (response.data.success) {
+                // Refresh current playlist if it's the one being modified
+                if (currentPlaylist && currentPlaylist._id === playlistId) {
+                    await loadPlaylist(playlistId, clerkId);
+                }
+
+                // Refresh playlists data
+                const playlistsResponse = await axios.get(`${url}/api/playlist/list`);
+                if (playlistsResponse.data.success) {
+                    setPlaylistsData(playlistsResponse.data.playlists);
+                }
+
+                return { success: true };
+            } else {
+                return { success: false, message: response.data.message };
+            }
+        } catch (error) {
+            console.error('Error adding song to playlist:', error);
+            return { success: false, message: error.response?.data?.message || 'Failed to add song to playlist' };
+        }
+    };
+
+    const removeSongFromPlaylist = async (playlistId, songId, clerkId = '') => {
+        try {
+            const response = await axios.post(`${url}/api/playlist/remove-song`, {
+                playlistId: playlistId,
+                songId: songId,
+                clerkId: clerkId
+            });
+
+            if (response.data.success) {
+                // Refresh current playlist if it's the one being modified
+                if (currentPlaylist && currentPlaylist._id === playlistId) {
+                    await loadPlaylist(playlistId, clerkId);
+                }
+
+                // Refresh playlists data
+                const playlistsResponse = await axios.get(`${url}/api/playlist/list`);
+                if (playlistsResponse.data.success) {
+                    setPlaylistsData(playlistsResponse.data.playlists);
+                }
+
+                return { success: true };
+            } else {
+                return { success: false, message: response.data.message };
+            }
+        } catch (error) {
+            console.error('Error removing song from playlist:', error);
+            return { success: false, message: error.response?.data?.message || 'Failed to remove song from playlist' };
+        }
+    };
+
+    const playPlaylist = async (playlistId, clerkId = '') => {
+        try {
+            // Load the playlist first
+            const result = await loadPlaylist(playlistId, clerkId);
+            if (result.success && result.playlist.songs && result.playlist.songs.length > 0) {
+                // Play the first song in the playlist
+                const firstSong = result.playlist.songs[0];
+                setTrack(firstSong);
+                setPlayOnLoad(true);
+                return { success: true };
+            } else {
+                return { success: false, message: 'Playlist is empty or could not be loaded' };
+            }
+        } catch (error) {
+            console.error('Error playing playlist:', error);
+            return { success: false, message: 'Failed to play playlist' };
+        }
+    };
+
     const contextValue = {
         audioRef,
         seekBar,
@@ -621,6 +786,15 @@ const PlayerContextProvider = (props) => {
         toggleLoopMode,
         LOOP_MODE,
         songsData, albumsData, artistsData, genresData, randomGenres,
+        // Playlist data and functions
+        playlistsData, setPlaylistsData,
+        currentPlaylist, setCurrentPlaylist,
+        createPlaylist,
+        loadPlaylist,
+        playPlaylist,
+        addSongToPlaylist,
+        removeSongFromPlaylist,
+        showSelectPlaylist, setShowSelectPlaylist,
         currentLyrics,
         activeLyricIndex,
         showLyrics,

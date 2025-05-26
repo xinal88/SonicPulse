@@ -7,7 +7,7 @@ import { API_ENDPOINTS } from '../api/config'
 import axios from 'axios'
 import ErrorBoundary from './ErrorBoundary';
 
-const Navbar = ({ showNavigation }) => {
+const Navbar = ({ showNavigation, backgroundColor = '#121212' }) => {
     const { randomGenres } = useContext(PlayerContext)
     const navigate = useNavigate()
     const location = useLocation()
@@ -67,7 +67,7 @@ const Navbar = ({ showNavigation }) => {
 
     return (
         <>
-            <div className='w-full flex justify-between items-center font-semibold bg-[#121212] py-3 px-6 h-14 shadow-sm'>
+            <div className='w-full flex justify-between items-center font-semibold py-3 px-6 h-14 shadow-sm' style={{ backgroundColor }}>
                 <div className='flex items-center gap-3'>
                     <img onClick={() => navigate(-1)} className='w-8 bg-black p-1.5 rounded-2xl cursor-pointer hover:bg-gray-800 transition-colors' src={assets.arrow_left} alt="" />
                     <img onClick={() => navigate(1)} className='w-8 bg-black p-1.5 rounded-2xl cursor-pointer hover:bg-gray-800 transition-colors' src={assets.arrow_right} alt="" />

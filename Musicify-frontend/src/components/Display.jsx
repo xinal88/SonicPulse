@@ -19,11 +19,21 @@ const Display = () => {
     const isAlbum = location.pathname.includes("album");
     const isArtist = location.pathname.includes("artist");
     const isPlaylist = location.pathname.includes("playlist");
+    const isGenre = location.pathname.includes("genre");
     const isHome = location.pathname === '/';
     const albumId = isAlbum ? location.pathname.split('/').pop() : "";
     const artistId = isArtist ? location.pathname.split('/').pop() : "";
     const albumBgColor = isAlbum && albumsData.length > 0 ? albumsData.find((x) => (x._id == albumId))?.bgColor : "#121212";
     const artistBgColor = isArtist && artistsData.length > 0 ? artistsData.find((x) => (x._id == artistId))?.bgColor : "#4c1d95";
+
+    // Determine navbar background color based on current page
+    const getNavbarBackgroundColor = () => {
+        if (isAlbum) return albumBgColor;
+        if (isArtist) return artistBgColor;
+        if (isPlaylist) return "#1e3a8a";
+        if (isGenre) return "#4c1d95"; // Purple for genres
+        return "#121212"; // Default dark color for home
+    };
 
     useEffect(()=>{
         if (isAlbum) {
@@ -32,10 +42,12 @@ const Display = () => {
             displayRef.current.style.background = `linear-gradient(${artistBgColor}, #121212)`;
         } else if (isPlaylist) {
             displayRef.current.style.background = `linear-gradient(#1e3a8a, #121212)`;
+        } else if (isGenre) {
+            displayRef.current.style.background = `linear-gradient(#4c1d95, #121212)`;
         } else {
             displayRef.current.style.background = `#121212`;
         }
-    }, [isAlbum, isArtist, isPlaylist, albumBgColor, artistBgColor])
+    }, [isAlbum, isArtist, isPlaylist, isGenre, albumBgColor, artistBgColor])
 
     // Lyrics display is now controlled by the mic icon in the Player component
     // The showLyrics state is managed in the PlayerContext
@@ -43,7 +55,7 @@ const Display = () => {
   return (
     <div ref={displayRef} className='w-[100%] m-2 px-6 pt-4 rounded bg-[#121212] text-white overflow-auto lg:w-[75%] lg:ml-0'>
         {/* Global Navbar */}
-        <Navbar showNavigation={isHome} />
+        <Navbar showNavigation={isHome} backgroundColor={getNavbarBackgroundColor()} />
 
         {showLyrics ? (
             <div className="h-full relative">

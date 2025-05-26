@@ -35,42 +35,7 @@ const App = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [clerkDisabled]);
 
-  // Add emergency reload button
-  useEffect(() => {
-    const createEmergencyButton = () => {
-      // Check if button already exists
-      if (document.getElementById('emergency-reload')) return;
 
-      const button = document.createElement('button');
-      button.id = 'emergency-reload';
-      button.innerHTML = '↻';
-      button.title = 'Emergency Reload';
-      button.style.position = 'fixed';
-      button.style.bottom = '20px';
-      button.style.right = '20px';
-      button.style.zIndex = '9999';
-      button.style.backgroundColor = 'red';
-      button.style.color = 'white';
-      button.style.width = '40px';
-      button.style.height = '40px';
-      button.style.borderRadius = '50%';
-      button.style.border = 'none';
-      button.style.fontSize = '20px';
-      button.style.cursor = 'pointer';
-      button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-
-      button.onclick = () => window.location.reload();
-
-      document.body.appendChild(button);
-    };
-
-    createEmergencyButton();
-
-    // Ensure button exists even if React crashes
-    const interval = setInterval(createEmergencyButton, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <div className='h-screen bg-black'>

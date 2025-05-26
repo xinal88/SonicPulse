@@ -1,7 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
-import Navbar from './Navbar';
 import { PlayerContext } from '../context/PlayerContext';
 import { assets } from '../assets/frontend-assets/assets';
 
@@ -179,7 +178,6 @@ const DisplayGenre = () => {
 
   return (
     <>
-      <Navbar showNavigation={true} />
       <div className='px-6'>
         <div className='mt-10'>
           <h2 className='text-5xl font-bold mb-4 md:text-7xl'>{genre.name}</h2>

@@ -4,11 +4,160 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import PlaylistItem from './PlaylistItem';
 import CreatePlaylist from './CreatePlaylist';
-import { PlayerContext } from '../context/PlayerContext'
+import { PlayerContext } from '../context/PlayerContext';
+import axios from 'axios';
 
 const Sidebar = () => {
-
     const navigate = useNavigate();
+    const { songsData, playWithId } = useContext(PlayerContext);
+
+    // Search state
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [showSearchResults, setShowSearchResults] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const searchRef = useRef(null);
+
+    // Handle search
+    const performSearch = async (term) => {
+        if (!term.trim()) {
+            setSearchResults([]);
+            setShowSearchResults(false);
+            return;
+        }
+
+        setLoading(true);
+        setShowSearchResults(true);
+
+        try {
+            let results = [];
+
+            // Search for songs via API
+            try {
+                const songResponse = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/search?q=${encodeURIComponent(term)}`);
+                if (songResponse.data && songResponse.data.results) {
+                    results = [...songResponse.data.results];
+                }
+            } catch (songErr) {
+                console.error('Song search error:', songErr);
+            }
+
+            // Search for albums via API
+            try {
+                const albumResponse = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/album/list?search=${encodeURIComponent(term)}`);
+                if (albumResponse.data && albumResponse.data.success && albumResponse.data.albums) {
+                    const albumResults = albumResponse.data.albums.map(album => ({
+                        _id: album._id,
+                        title: album.name,
+                        artist: album.artist || '',
+                        type: 'album',
+                        image: album.image || 'https://via.placeholder.com/150?text=Album',
+                        desc: album.desc
+                    }));
+                    results = [...results, ...albumResults];
+                }
+            } catch (albumErr) {
+                console.error('Album search error:', albumErr);
+            }
+
+            // Also search locally in the loaded data for songs
+            if (songsData && songsData.length > 0) {
+                const filteredSongs = songsData.filter(song =>
+                    (song.name && song.name.toLowerCase().includes(term.toLowerCase())) ||
+                    (song.artistName && song.artistName.toLowerCase().includes(term.toLowerCase())) ||
+                    (song.album && song.album.toLowerCase().includes(term.toLowerCase()))
+                );
+
+                if (filteredSongs.length > 0) {
+                    const existingIds = new Set(results.map(item => item._id));
+                    filteredSongs.forEach(item => {
+                        if (!existingIds.has(item._id)) {
+                            results.push({
+                                _id: item._id,
+                                title: item.name || item.title,
+                                artist: item.artistName || item.artist,
+                                type: 'song',
+                                image: item.image,
+                                file: item.file
+                            });
+                        }
+                    });
+                }
+            }
+
+            setSearchResults(results.slice(0, 8)); // Limit to 8 results for sidebar
+        } catch (err) {
+            console.error('Search error:', err);
+            // Fallback to local search only
+            if (songsData && songsData.length > 0) {
+                const filteredSongs = songsData.filter(song =>
+                    (song.name && song.name.toLowerCase().includes(term.toLowerCase())) ||
+                    (song.artistName && song.artistName.toLowerCase().includes(term.toLowerCase())) ||
+                    (song.album && song.album.toLowerCase().includes(term.toLowerCase()))
+                );
+
+                const formattedResults = filteredSongs.slice(0, 8).map(item => ({
+                    _id: item._id,
+                    title: item.name || item.title,
+                    artist: item.artistName || item.artist,
+                    type: 'song',
+                    image: item.image,
+                    file: item.file
+                }));
+
+                setSearchResults(formattedResults);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSearchChange = (e) => {
+        const value = e.target.value;
+        setSearchTerm(value);
+
+        // Debounce search
+        if (value.trim()) {
+            setTimeout(() => {
+                performSearch(value);
+            }, 300);
+        } else {
+            setSearchResults([]);
+            setShowSearchResults(false);
+        }
+    };
+
+    const handleResultClick = (item) => {
+        try {
+            if (item.type === 'song') {
+                if (playWithId) {
+                    playWithId(item._id);
+                }
+            } else if (item.type === 'album') {
+                navigate(`/album/${item._id}`);
+            } else if (item.type === 'artist') {
+                navigate(`/artist/${item._id}`);
+            }
+            // Clear search after selection
+            setSearchTerm('');
+            setSearchResults([]);
+            setShowSearchResults(false);
+        } catch (err) {
+            console.error('Error handling result click:', err);
+        }
+    };
+
+    // Close search results when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (searchRef.current && !searchRef.current.contains(event.target)) {
+                setShowSearchResults(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
   return (
     <div className='w-[25%] h-full p-2 flex-col gap-2 text-white hidden lg:flex'>
@@ -17,9 +166,62 @@ const Sidebar = () => {
           <img className='w-6' src={assets.home_icon} alt="" />
           <p className='font-bold'>Home</p>
         </div>
-        <div onClick={()=>navigate('/search')} className='flex items-center gap-3 pl-8 cursor-pointer'>
-          <img className='w-6' src={assets.search_icon} alt="" />
-          <p className='font-bold'>Search</p>
+        {/* Search Input */}
+        <div ref={searchRef} className='relative px-4'>
+          <div className='relative'>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              placeholder="Search songs, artists, albums..."
+              className="w-full px-3 py-2 pl-10 text-white bg-[#2a2a2a] border border-gray-600 rounded-full focus:outline-none focus:border-white focus:bg-[#3a3a3a] transition-colors text-sm"
+            />
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+              <img src={assets.search_icon} alt="Search" className="w-4 h-4 opacity-70" />
+            </div>
+            {loading && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+              </div>
+            )}
+          </div>
+
+          {/* Search Results Dropdown */}
+          {showSearchResults && (
+            <div className="absolute top-full left-4 right-4 mt-1 bg-[#2a2a2a] border border-gray-600 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+              {searchResults.length > 0 ? (
+                <div className="py-2">
+                  {searchResults.map((item) => (
+                    <div
+                      key={item._id}
+                      className="flex items-center gap-3 px-3 py-2 hover:bg-[#3a3a3a] cursor-pointer"
+                      onClick={() => handleResultClick(item)}
+                    >
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        className="w-10 h-10 rounded object-cover"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'https://via.placeholder.com/40?text=♪';
+                        }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-medium truncate">{item.title}</p>
+                        <p className="text-gray-400 text-xs truncate">
+                          {item.artist} {item.type === 'album' ? '• Album' : item.type === 'artist' ? '• Artist' : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-4 text-center text-gray-400 text-sm">
+                  {loading ? 'Searching...' : 'No results found'}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className='bg-[#121212] h-[85%] rounded'>

@@ -4,6 +4,7 @@ import axios from 'axios';
 import { PlayerContext } from '../context/PlayerContext';
 import ErrorBoundary from './ErrorBoundary';
 import Lyrics from './Lyrics';
+import { assets } from '../assets/frontend-assets/assets';
 
 const Search = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -142,6 +143,19 @@ const Search = () => {
     }
   }, [location.search, setShowLyrics, showLyrics]);
 
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchTerm.trim()) {
+      // Update URL with search query
+      navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+      performSearch(searchTerm.trim());
+    }
+  };
+
+  const handleInputChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
   const handleResultClick = (item) => {
     try {
       if (item.type === 'song') {
@@ -186,7 +200,29 @@ const Search = () => {
           </div>
         ) : (
           <>
-            <h1 className="text-2xl font-bold mb-6">Search Results</h1>
+            <h1 className="text-2xl font-bold mb-6">Search</h1>
+
+            {/* Search Input Form */}
+            <form onSubmit={handleSearch} className="mb-8">
+              <div className="relative max-w-2xl">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={handleInputChange}
+                  placeholder="What do you want to listen to?"
+                  className="w-full px-4 py-3 pl-12 text-white bg-[#2a2a2a] border border-gray-600 rounded-full focus:outline-none focus:border-white focus:bg-[#3a3a3a] transition-colors"
+                />
+                <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+                  <img src={assets.search_icon} alt="Search" className="w-5 h-5 opacity-70" />
+                </div>
+                <button
+                  type="submit"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-1.5 bg-white text-black rounded-full font-medium hover:bg-gray-200 transition-colors"
+                >
+                  Search
+                </button>
+              </div>
+            </form>
 
             {loading ? (
               <div className="text-center py-4">

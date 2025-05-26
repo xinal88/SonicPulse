@@ -344,28 +344,11 @@ const DisplayPlaylist = () => {
               {currentPlaylist.songs.map((song, index) => (
                 <div
                   key={song._id}
-                  className={`grid grid-cols-[16px_4fr_3fr_1fr] gap-4 px-4 py-2 hover:bg-white hover:bg-opacity-10 rounded group cursor-pointer transition-all duration-200 ${
-                    track && track._id === song._id ? 'bg-white bg-opacity-10' : ''
-                  }`}
+                  className="grid grid-cols-[16px_4fr_3fr_1fr] gap-4 px-4 py-2 cursor-pointer"
                   onClick={() => playWithId(song._id)}
                 >
                   <div className="flex items-center justify-center">
-                    {track && track._id === song._id && playStatus ? (
-                      <div className="w-4 h-4 flex items-center justify-center">
-                        <span className="animate-pulse text-green-500">▶</span>
-                      </div>
-                    ) : (
-                      <span className="group-hover:hidden">{index + 1}</span>
-                    )}
-                    <img
-                      src={assets.play_icon}
-                      alt="Play"
-                      className="w-4 h-4 hidden group-hover:block cursor-pointer opacity-80 hover:opacity-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        playWithId(song._id);
-                      }}
-                    />
+                    <span>{index + 1}</span>
                   </div>
 
                   <div className="flex items-center gap-3 overflow-hidden">
@@ -375,7 +358,7 @@ const DisplayPlaylist = () => {
                       className="w-10 h-10 object-cover rounded"
                     />
                     <div className="min-w-0">
-                      <p className={`truncate ${track && track._id === song._id ? 'text-green-500' : 'text-white'}`}>
+                      <p className="truncate text-white">
                         {song.name}
                       </p>
                       <p className="text-sm text-gray-400 truncate">{song.artistName}</p>
@@ -389,7 +372,7 @@ const DisplayPlaylist = () => {
                   <div className="flex items-center justify-end gap-4">
                     {isOwner && (
                       <button
-                        className="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 p-1 hover:bg-white hover:bg-opacity-10 rounded transition-all duration-200"
+                        className="text-gray-400 p-1"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleRemoveSong(song._id);

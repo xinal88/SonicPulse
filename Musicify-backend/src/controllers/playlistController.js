@@ -119,7 +119,7 @@ const listPlaylists = async (req, res) => {
 
         // Get playlists and populate creator information
         const playlists = await playlistModel.find(query)
-            .populate('creator', 'fullName imageURL')
+            .populate('creator', 'fullName imageURL clerkId')
             .sort({ updatedAt: -1 });
 
         res.json({
@@ -156,7 +156,7 @@ const getPlaylist = async (req, res) => {
                 path: 'songs',
                 select: '_id name artist artistName album image file duration lrcFile' // Explicitly select all needed fields
             })
-            .populate('creator', 'fullName imageURL');
+            .populate('creator', 'fullName imageURL clerkId');
 
         if (!playlist) {
             console.log(`Playlist not found with ID: ${id}`);

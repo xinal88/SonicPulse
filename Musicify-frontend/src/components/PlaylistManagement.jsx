@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { PlayerContext } from '../context/PlayerContext';
 import { useUser } from '@clerk/clerk-react';
@@ -9,11 +10,13 @@ const url = 'http://localhost:4000';
 
 const PlaylistManagement = ({ playlistId, onClose }) => {
   const { user } = useUser();
+  const navigate = useNavigate();
   const {
     currentPlaylist,
     loadPlaylist,
     removeSongFromPlaylist,
-    setCurrentPlaylist
+    setCurrentPlaylist,
+    deletePlaylist
   } = useContext(PlayerContext);
 
   const [songs, setSongs] = useState([]);
@@ -170,32 +173,31 @@ const PlaylistManagement = ({ playlistId, onClose }) => {
     }
   };
 
-  const handleDeletePlaylist = async () => {
-    try {
-      console.log('Deleting playlist:', playlistId);
-      console.log('User ID:', user?.id || 'not available');
+  const handleDeletePlaylist = () => {
+    console.log('Deleting playlist with optimistic update:', playlistId);
 
-      const response = await axios.post(`${url}/api/playlist/delete`, {
-        id: playlistId,
-        clerkId: user?.id || ''
-      });
+    // Close the confirmation modal immediately
+    setShowDeleteConfirm(false);
 
-      console.log('Delete response:', response.data);
+    // Close the management modal immediately (optimistic)
+    onClose();
 
-      if (response.data.success) {
-        console.log('Playlist deleted successfully, redirecting to home');
-        // Navigate back to playlists page
-        window.location.href = '/';
+    // Navigate back to home immediately (optimistic) - using React Router for instant navigation
+    navigate('/');
+
+    // Fire-and-forget: Start the delete process in background without waiting
+    deletePlaylist(playlistId, user?.id || '').then(result => {
+      if (!result.success) {
+        console.error('Delete failed:', result.message);
+        // Show error notification (could add a toast notification here)
+        // Note: User has already navigated away, so this is just for logging
       } else {
-        console.error('Failed to delete playlist:', response.data.message);
-        setError(response.data.message || 'Failed to delete playlist');
-        setShowDeleteConfirm(false); // Close the modal to show the error
+        console.log('Playlist deleted successfully');
       }
-    } catch (error) {
+    }).catch(error => {
       console.error('Error deleting playlist:', error);
-      setError('An unexpected error occurred: ' + (error.message || ''));
-      setShowDeleteConfirm(false); // Close the modal to show the error
-    }
+      // Error handling in background
+    });
   };
 
   const handleDuplicatePlaylist = async () => {
@@ -220,8 +222,8 @@ const PlaylistManagement = ({ playlistId, onClose }) => {
           });
         }
 
-        // Navigate to the new playlist
-        window.location.href = `/playlist/${newPlaylistId}`;
+        // Navigate to the new playlist using React Router for instant navigation
+        navigate(`/playlist/${newPlaylistId}`);
       } else {
         setError(response.data.message || 'Failed to duplicate playlist');
       }

@@ -9,7 +9,8 @@ import axios from 'axios';
 
 const Sidebar = () => {
     const navigate = useNavigate();
-    const { songsData, playWithId } = useContext(PlayerContext);
+    const { user } = useUser();
+    const { songsData, playWithId, playlistsData, createPlaylist } = useContext(PlayerContext);
 
     // Search state
     const [searchTerm, setSearchTerm] = useState('');
@@ -17,6 +18,9 @@ const Sidebar = () => {
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [loading, setLoading] = useState(false);
     const searchRef = useRef(null);
+
+    // Playlist modal state
+    const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
 
     // Handle search
     const performSearch = async (term) => {
@@ -147,6 +151,46 @@ const Sidebar = () => {
         }
     };
 
+    // Filter playlists to show only user's playlists
+    const userPlaylists = playlistsData.filter(playlist => {
+        if (!user || !playlist.creator) return false;
+
+        // Debug logging
+        console.log('Filtering playlist:', playlist.name);
+        console.log('Playlist creator:', playlist.creator);
+        console.log('Current user ID (Clerk):', user.id);
+
+        // Check if the user is the creator
+        // The creator field should have clerkId when populated from User model
+        const isOwner = (playlist.creator.clerkId && playlist.creator.clerkId === user.id) ||
+                       (playlist.creator._id && playlist.creator._id === user.id) ||
+                       (playlist.creator === user.id); // In case creator is just the ID string
+
+        console.log('Is owner:', isOwner);
+        return isOwner;
+    });
+
+    // Debug logging for playlist counts
+    console.log('Total playlists:', playlistsData.length);
+    console.log('User playlists:', userPlaylists.length);
+    console.log('User playlists:', userPlaylists);
+
+    // Handle playlist creation
+    const handleCreatePlaylist = () => {
+        if (!user) {
+            // Could show a toast or redirect to login
+            console.log('User must be logged in to create playlist');
+            return;
+        }
+        setShowCreatePlaylist(true);
+    };
+
+    const handlePlaylistCreated = (newPlaylist) => {
+        setShowCreatePlaylist(false);
+        // The PlayerContext will automatically refresh playlistsData
+        console.log('Playlist created:', newPlaylist);
+    };
+
     // Close search results when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -232,20 +276,49 @@ const Sidebar = () => {
           </div>
           <div className='flex items-center gap-3'>
             <img className='w-5' src={assets.arrow_icon} alt="" />
-            <img className='w-5' src={assets.plus_icon} alt="" />
+            <img
+              className='w-5 cursor-pointer hover:scale-110 transition-transform'
+              src={assets.plus_icon}
+              alt="Create Playlist"
+              onClick={handleCreatePlaylist}
+              title="Create Playlist"
+            />
           </div>
         </div>
-        <div className='p-4 bg-[#242424] m-2 rounded font-semibold flex flex-col items-start justify-start gap-1 pl-4'>
-          <h1>Create your first playlist</h1>
-          <p className='font-light'>It's easy, we will help you</p>
-          <button className='px-4 py-1.5 bg-white text-[15px] text-black rounded-full mt-4'>Create Playlist</button>
-        </div>
-        <div className='p-4 bg-[#242424] m-2 rounded font-semibold flex flex-col items-start justify-start gap-1 pl-4'>
-          <h1>Let's find some podcasts to follow</h1>
-          <p className='font-light'>We'll keep you update on new episodes</p>
-          <button className='px-4 py-1.5 bg-white text-[15px] text-black rounded-full mt-4'>Browse podcasts</button>
-        </div>
+        {/* Show "Create your first playlist" only when user has no playlists */}
+        {user && userPlaylists.length === 0 && (
+          <div className='p-4 bg-[#242424] m-2 rounded font-semibold flex flex-col items-start justify-start gap-1 pl-4'>
+            <h1>Create your first playlist</h1>
+            <p className='font-light'>It's easy, we will help you</p>
+            <button
+              onClick={handleCreatePlaylist}
+              className='px-4 py-1.5 bg-white text-[15px] text-black rounded-full mt-4 hover:scale-105 transition-transform'
+            >
+              Create Playlist
+            </button>
+          </div>
+        )}
+
+        {/* Display existing user playlists */}
+        {user && userPlaylists.length > 0 && (
+          <div className='mt-4 px-2'>
+            <h3 className='text-sm font-semibold text-gray-400 mb-2 px-2'>Recently Created</h3>
+            <div className='space-y-1'>
+              {userPlaylists.slice(0, 5).map((playlist) => (
+                <PlaylistItem key={playlist._id} playlist={playlist} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Create Playlist Modal */}
+      {showCreatePlaylist && (
+        <CreatePlaylist
+          onClose={() => setShowCreatePlaylist(false)}
+          onPlaylistCreated={handlePlaylistCreated}
+        />
+      )}
     </div>
   )
 }

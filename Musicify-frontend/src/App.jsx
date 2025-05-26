@@ -1,6 +1,6 @@
 // Musicify-frontend/src/App.jsx
 import { useContext, useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { PlayerContext } from './context/PlayerContext';
 import Sidebar from './components/Sidebar';
 import Display from './components/Display';
@@ -15,6 +15,7 @@ import Search from './components/Search';
 const App = () => {
   const {audioRef, track, songsData, showNowPlaying, showFullscreen, showQueue, showSelectPlaylist, setShowSelectPlaylist} = useContext(PlayerContext);
   const [clerkDisabled, setClerkDisabled] = useState(false);
+  const navigate = useNavigate();
 
   // Check if Clerk should be disabled (for troubleshooting)
   useEffect(() => {
@@ -65,8 +66,8 @@ const App = () => {
             {showSelectPlaylist && <SelectPlaylistModal onClose={(playlistId) => {
               setShowSelectPlaylist(false);
               if (playlistId) {
-                // Navigate to the playlist if a playlist was selected
-                window.location.href = `/#/playlist/${playlistId}`;
+                // Navigate to the playlist if a playlist was selected using React Router for instant navigation
+                navigate(`/playlist/${playlistId}`);
               }
             }} />}
           </>

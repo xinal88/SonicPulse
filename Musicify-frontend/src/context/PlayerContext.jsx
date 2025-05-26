@@ -203,6 +203,7 @@ const PlayerContextProvider = (props) => {
             try {
                 const response = await axios.get(`${url}/api/playlist/list`);
                 if (response.data.success) {
+                    console.log('Initial playlists loaded:', response.data.playlists);
                     setPlaylistsData(response.data.playlists);
                 }
             } catch (error) {
@@ -646,10 +647,14 @@ const PlayerContextProvider = (props) => {
             });
 
             if (response.data.success) {
+                console.log('Playlist created successfully, refreshing playlist data...');
                 // Refresh playlists data
                 const playlistsResponse = await axios.get(`${url}/api/playlist/list`);
                 if (playlistsResponse.data.success) {
+                    console.log('Refreshed playlists:', playlistsResponse.data.playlists);
                     setPlaylistsData(playlistsResponse.data.playlists);
+                } else {
+                    console.error('Failed to refresh playlists:', playlistsResponse.data.message);
                 }
                 return { success: true, playlist: response.data.playlist };
             } else {
@@ -721,34 +726,89 @@ const PlayerContextProvider = (props) => {
         }
     };
 
-    const removeSongFromPlaylist = async (playlistId, songId, clerkId = '') => {
-        try {
-            const response = await axios.post(`${url}/api/playlist/remove-song`, {
-                playlistId: playlistId,
-                songId: songId,
-                clerkId: clerkId
+    const removeSongFromPlaylist = (playlistId, songId, clerkId = '') => {
+        // OPTIMISTIC UPDATE: Remove song from current playlist immediately
+        let originalPlaylist = null;
+        if (currentPlaylist && currentPlaylist._id === playlistId) {
+            originalPlaylist = { ...currentPlaylist };
+            const updatedSongs = currentPlaylist.songs.filter(song => song._id !== songId);
+            setCurrentPlaylist({
+                ...currentPlaylist,
+                songs: updatedSongs,
+                songCount: updatedSongs.length
             });
+            console.log('Optimistically removed song from playlist UI');
+        }
 
+        // Send remove request to backend in background (fire-and-forget)
+        axios.post(`${url}/api/playlist/remove-song`, {
+            playlistId: playlistId,
+            songId: songId,
+            clerkId: clerkId
+        }).then(response => {
             if (response.data.success) {
-                // Refresh current playlist if it's the one being modified
-                if (currentPlaylist && currentPlaylist._id === playlistId) {
-                    await loadPlaylist(playlistId, clerkId);
+                console.log('Song removed successfully from backend');
+                // Refresh playlists data to keep sidebar in sync
+                axios.get(`${url}/api/playlist/list`).then(playlistsResponse => {
+                    if (playlistsResponse.data.success) {
+                        setPlaylistsData(playlistsResponse.data.playlists);
+                    }
+                });
+            } else {
+                // REVERT: Backend failed, restore the song in UI
+                console.error('Backend remove failed, reverting UI:', response.data.message);
+                if (originalPlaylist) {
+                    setCurrentPlaylist(originalPlaylist);
                 }
+            }
+        }).catch(error => {
+            // REVERT: Network error, restore the song in UI
+            console.error('Network error during song removal, reverting UI:', error);
+            if (currentPlaylist && currentPlaylist._id === playlistId) {
+                // Re-fetch to restore original state
+                loadPlaylist(playlistId, clerkId);
+            }
+        });
 
-                // Refresh playlists data
-                const playlistsResponse = await axios.get(`${url}/api/playlist/list`);
+        // Return immediately with success (optimistic)
+        return Promise.resolve({ success: true });
+    };
+
+    const deletePlaylist = (playlistId, clerkId = '') => {
+        // OPTIMISTIC UPDATE: Remove playlist from UI immediately
+        const originalPlaylists = [...playlistsData];
+        const updatedPlaylists = playlistsData.filter(playlist => playlist._id !== playlistId);
+        setPlaylistsData(updatedPlaylists);
+
+        console.log('Optimistically removed playlist from UI, sending delete request in background...');
+
+        // Send delete request to backend in background (fire-and-forget)
+        axios.post(`${url}/api/playlist/delete`, {
+            id: playlistId,
+            clerkId: clerkId
+        }).then(response => {
+            if (response.data.success) {
+                console.log('Playlist deleted successfully on backend');
+            } else {
+                // REVERT: Backend failed, restore the playlist in UI
+                console.error('Backend delete failed, reverting UI:', response.data.message);
+                setPlaylistsData(originalPlaylists);
+            }
+        }).catch(error => {
+            // REVERT: Network error, restore the playlist in UI
+            console.error('Network error during delete, reverting UI:', error);
+            // Restore original state by re-fetching (safest approach)
+            axios.get(`${url}/api/playlist/list`).then(playlistsResponse => {
                 if (playlistsResponse.data.success) {
                     setPlaylistsData(playlistsResponse.data.playlists);
                 }
+            }).catch(fetchError => {
+                console.error('Failed to restore playlists after error:', fetchError);
+            });
+        });
 
-                return { success: true };
-            } else {
-                return { success: false, message: response.data.message };
-            }
-        } catch (error) {
-            console.error('Error removing song from playlist:', error);
-            return { success: false, message: error.response?.data?.message || 'Failed to remove song from playlist' };
-        }
+        // Return immediately with success (optimistic)
+        return Promise.resolve({ success: true, message: 'Playlist deleted successfully' });
     };
 
     const playPlaylist = async (playlistId, clerkId = '') => {
@@ -790,6 +850,7 @@ const PlayerContextProvider = (props) => {
         playlistsData, setPlaylistsData,
         currentPlaylist, setCurrentPlaylist,
         createPlaylist,
+        deletePlaylist,
         loadPlaylist,
         playPlaylist,
         addSongToPlaylist,

@@ -213,7 +213,12 @@ const AddSong = () => {
         // Clear localStorage after successful submission
         clearStoredFormData();
       } else {
-        toast.error("Something went wrong");
+        // Check if error is specifically related to LRC file
+        if (error?.response?.data?.message?.includes('LRC')) {
+          toast.error(`LRC File Error: ${error.response.data.message}`);
+        } else {
+          toast.error("Something went wrong");
+        }
       }
 
     } catch (error) {

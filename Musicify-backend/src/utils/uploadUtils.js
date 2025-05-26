@@ -26,7 +26,7 @@ export const uploadLrcFile = async (lrcFile) => {
         });
         return lrcUpload.secure_url;
     } catch (error) {
-        console.error("Error uploading LRC file:", error);
+        console.error("Failed to upload LRC file:", error.message);
         return "";
     }
 };

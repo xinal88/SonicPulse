@@ -125,9 +125,6 @@ const addSong = async (req, res) => {
                 }
             }
 
-            // Handle LRC file upload
-            const lrcFileUrl = req.files.lrc?.[0] ? await uploadLrcFile(req.files.lrc[0]) : "";
-
             // Get artist names
             const { artistName } = await getArtistNames(artistIds);
 
@@ -139,10 +136,20 @@ const addSong = async (req, res) => {
                 image: req.body.spotifyUrl ? songData.image : imageUrl,  // Use Spotify image or uploaded image
                 file: audioUrl,
                 duration,
-                lrcFile: lrcFileUrl,
+                lrcFile: null,  // Will be set after if/else block if LRC file exists
                 genres,
                 fingerprints: []
             };
+
+        }
+
+        // Handle LRC file upload - moved outside of if/else for Spotify URL
+        if (req.files?.lrc?.[0]) {
+            const lrcFileUrl = await uploadLrcFile(req.files.lrc[0]);
+            if (lrcFileUrl) {
+                songData.lrcFile = lrcFileUrl;
+                console.log("LRC file uploaded successfully:", lrcFileUrl);
+            }
         }
 
         // Handle fingerprinting

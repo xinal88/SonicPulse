@@ -1,7 +1,6 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
 import { assets } from '../assets/frontend-assets/assets';
 import { useNavigate } from 'react-router-dom';
-import { PlayerContext } from '../context/PlayerContext';
 import { useUser } from '@clerk/clerk-react';
 import PlaylistItem from './PlaylistItem';
 import CreatePlaylist from './CreatePlaylist';

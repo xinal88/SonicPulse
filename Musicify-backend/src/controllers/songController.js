@@ -32,10 +32,20 @@ const addSong = async (req, res) => {
                 const album = req.body.album || 'none';  // Get album from request or default to 'none'
                 
                 // Find or create artists
-                const artistPromises = trackInfo.artists.map(async (artistName) => {
-                    let artist = await artistModel.findOne({ name: { $regex: new RegExp(`^${artistName}$`, 'i') } });
+                const artistPromises = trackInfo.artists.map(async (artistData) => {
+                    console.log(`Processing artist:`, artistData);
+                    let artist = await artistModel.findOne({ name: { $regex: new RegExp(`^${artistData.name}$`, 'i') } });
                     if (!artist) {
-                        artist = await artistModel.create({ name: artistName });
+                        console.log(`Creating new artist with data:`, {
+                            name: artistData.name,
+                            image: artistData.image,
+                            bgColor: artistData.bgColor
+                        });
+                        artist = await artistModel.create({
+                            name: artistData.name,
+                            image: artistData.image || 'https://placeholder.com/artist',
+                            bgColor: artistData.bgColor || '#e0e0e0'
+                        });
                     }
                     return artist._id;
                 });
@@ -45,7 +55,7 @@ const addSong = async (req, res) => {
 
                 // Download audio from YouTube
                 // Format search query
-                const searchQuery = `${trackInfo.name} ${trackInfo.artists[0]}`;
+                const searchQuery = `${trackInfo.name} ${trackInfo.artists[0].name}`;
                 console.log("Using search query:", searchQuery);
                 
                 const downloadResult = await findAndDownloadYoutubeAudio(searchQuery);

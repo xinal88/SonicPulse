@@ -33,9 +33,26 @@ export const getSpotifyTrackInfo = async (trackId) => {
     try {
         await refreshSpotifyToken();
         const track = await spotifyApi.getTrack(trackId);
+        
+        // Get detailed info for each artist
+        const artistPromises = track.body.artists.map(async (artist) => {
+            const artistDetails = await spotifyApi.getArtist(artist.id);
+            return {
+                name: artist.name,
+                image: artistDetails.body.images[0]?.url,
+                // Generate a random pastel color if artist has an image
+                bgColor: artistDetails.body.images[0]?.url ?
+                    '#' + Math.floor(Math.random()*16777215).toString(16) :
+                    '#e0e0e0'
+            };
+        });
+        
+        const artistsWithDetails = await Promise.all(artistPromises);
+        console.log('Artists with details:', artistsWithDetails);
+        
         return {
             name: track.body.name,
-            artists: track.body.artists.map(artist => artist.name),
+            artists: artistsWithDetails,
             image: track.body.album.images[0]?.url,
             duration: formatDuration(track.body.duration_ms / 1000)
         };

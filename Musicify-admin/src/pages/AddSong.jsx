@@ -4,13 +4,17 @@ import axios from 'axios';
 import { url } from '../App';
 import { toast } from 'react-toastify';
 import { isDuplicateGenre } from '../utils/genreUtils';
-import { FaYoutube } from 'react-icons/fa';
+import { FaYoutube, FaSpotify } from 'react-icons/fa';
 
 const AddSong = () => {
   // Initialize state from localStorage if available
-  const [image, setImage] = useState(false);
   const [song, setSong] = useState(false);
+  const [image, setImage] = useState(false);
+  const [useAlbumImage, setUseAlbumImage] = useState(
+    localStorage.getItem('addSong_useAlbumImage') === 'true'
+  );
   const [lrcFile, setLrcFile] = useState(false);
+  const [spotifyUrl, setSpotifyUrl] = useState(localStorage.getItem('addSong_spotifyUrl') || "");
   const [name, setName] = useState(localStorage.getItem('addSong_name') || "");
   const [selectedArtists, setSelectedArtists] = useState(
     JSON.parse(localStorage.getItem('addSong_selectedArtists') || '[]')
@@ -27,10 +31,8 @@ const AddSong = () => {
   const [newGenres, setNewGenres] = useState(
     JSON.parse(localStorage.getItem('addSong_newGenres') || '[]')
   );
-  const [useAlbumImage, setUseAlbumImage] = useState(
-    localStorage.getItem('addSong_useAlbumImage') === 'true'
-  );
   const [youtubeUrl, setYoutubeUrl] = useState(localStorage.getItem('addSong_youtubeUrl') || "");
+  const [fetchingMetadata, setFetchingMetadata] = useState(false);
 
   // Save state to localStorage whenever it changes
   useEffect(() => {
@@ -41,7 +43,8 @@ const AddSong = () => {
     localStorage.setItem('addSong_newGenres', JSON.stringify(newGenres));
     localStorage.setItem('addSong_useAlbumImage', useAlbumImage.toString());
     localStorage.setItem('addSong_youtubeUrl', youtubeUrl);
-  }, [name, selectedArtists, album, selectedGenres, newGenres, useAlbumImage, youtubeUrl]);
+    localStorage.setItem('addSong_spotifyUrl', spotifyUrl);
+  }, [name, selectedArtists, album, selectedGenres, newGenres, useAlbumImage, youtubeUrl, spotifyUrl]);
 
   // Clear localStorage after successful submission
   const clearStoredFormData = () => {
@@ -50,22 +53,22 @@ const AddSong = () => {
     localStorage.removeItem('addSong_album');
     localStorage.removeItem('addSong_selectedGenres');
     localStorage.removeItem('addSong_newGenres');
-    localStorage.removeItem('addSong_useAlbumImage');
     localStorage.removeItem('addSong_youtubeUrl');
+    localStorage.removeItem('addSong_spotifyUrl');
   };
 
   const onSubmitHandler = async (e) => {
     e.preventDefault();
 
-    // Validate that either an image is uploaded or album image is used
-    if (!image && !(useAlbumImage && album !== "none")) {
-      toast.error("Please upload an image or use the album image");
+    // Validate URLs - only one should be provided
+    if (spotifyUrl && youtubeUrl) {
+      toast.error("Please provide either a Spotify URL or a YouTube URL, not both");
       return;
     }
 
-    // Validate that audio is uploaded
-    if (!song) {
-      toast.error("Please upload an audio file");
+    // Validate that audio is uploaded if no Spotify URL is provided
+    if (!spotifyUrl && !song) {
+      toast.error("Please either upload an audio file or provide a Spotify URL");
       return;
     }
 
@@ -75,9 +78,75 @@ const AddSong = () => {
       return;
     }
 
+    // Validate image if using YouTube URL
+    if (youtubeUrl && !spotifyUrl && !image && !(useAlbumImage && album !== "none")) {
+      toast.error("Please upload an image or use the album image when using YouTube URL");
+      return;
+    }
+
     setLoading(true);
     try {
-      // If YouTube URL is provided, fetch details first
+      const formData = new FormData();
+      formData.append('name', name);
+
+      // Append each selected artist ID
+      selectedArtists.forEach(artistId => {
+        formData.append('artists', artistId);
+      });
+
+      // Handle image for YouTube URL option
+      if (youtubeUrl && !spotifyUrl) {
+        if (useAlbumImage && album !== "none") {
+          formData.append('useAlbumImage', 'true');
+          formData.append('albumId', getAlbumIdByName(album));
+        } else {
+          formData.append('image', image);
+        }
+      }
+
+      // If Spotify URL is provided, use it first
+      if (spotifyUrl) {
+        try {
+          setFetchingMetadata(true);
+          toast.info("Fetching details from Spotify...");
+          formData.append('spotifyUrl', spotifyUrl);
+          formData.append('generateFingerprint', 'true');  // Add fingerprint generation for Spotify URLs
+          // The actual metadata fetching will happen on the backend
+        } catch (error) {
+          console.error("Error with Spotify URL:", error);
+          toast.error("Failed to process Spotify URL");
+          return;
+        } finally {
+          setFetchingMetadata(false);
+        }
+      }
+      
+      // Only append audio file if not using Spotify URL
+      if (!spotifyUrl && song) {
+        formData.append('audio', song);
+      }
+
+      // Add album name
+      formData.append('album', album);
+
+      // Add LRC file if available
+      if (lrcFile) {
+        formData.append('lrc', lrcFile);
+      }
+
+      // Add genres
+      console.log("Sending selected genres:", selectedGenres);
+      selectedGenres.forEach(genreId => {
+        formData.append('genres', genreId);
+      });
+
+      // Add new genres
+      console.log("Sending new genres:", newGenres);
+      newGenres.forEach(genre => {
+        formData.append('newGenres', genre);
+      });
+
+      // If YouTube URL is provided and no Spotify URL, fetch details from YouTube
       if (youtubeUrl) {
         try {
           toast.info("Fetching details from YouTube...");
@@ -117,42 +186,6 @@ const AddSong = () => {
         }
       }
 
-      const formData = new FormData();
-      formData.append('name', name);
-
-      // Append each selected artist ID
-      selectedArtists.forEach(artistId => {
-        formData.append('artists', artistId);
-      });
-
-      // If using album image, send a flag to the backend
-      if (useAlbumImage && album !== "none") {
-        formData.append('useAlbumImage', 'true');
-        formData.append('albumId', getAlbumIdByName(album));
-      } else {
-        // Otherwise, send the uploaded image
-        formData.append('image', image);
-      }
-
-      formData.append('audio', song);
-      formData.append('album', album);
-
-      // Add LRC file if available
-      if (lrcFile) {
-        formData.append('lrc', lrcFile);
-      }
-
-      // Add genres
-      console.log("Sending selected genres:", selectedGenres);
-      selectedGenres.forEach(genreId => {
-        formData.append('genres', genreId);
-      });
-
-      // Add new genres
-      console.log("Sending new genres:", newGenres);
-      newGenres.forEach(genre => {
-        formData.append('newGenres', genre);
-      });
 
       // Add YouTube URL if provided
       if (youtubeUrl) {
@@ -175,11 +208,17 @@ const AddSong = () => {
         setNewGenres([]);
         setNewGenre("");
         setYoutubeUrl("");
+        setSpotifyUrl("");
         
         // Clear localStorage after successful submission
         clearStoredFormData();
       } else {
-        toast.error("Something went wrong");
+        // Check if error is specifically related to LRC file
+        if (error?.response?.data?.message?.includes('LRC')) {
+          toast.error(`LRC File Error: ${error.response.data.message}`);
+        } else {
+          toast.error("Something went wrong");
+        }
       }
 
     } catch (error) {
@@ -316,34 +355,40 @@ const AddSong = () => {
   ) : (
     <form onSubmit={onSubmitHandler} className='flex flex-col items-start gap-8 text-gray-600' action="">
       <div className='flex gap-8'>
-        <div className='flex flex-col gap-4'>
-          <p>Upload song</p>
-          <input onChange={(e) => setSong(e.target.files[0])} type="file" id='song' accept='audio/*' hidden/>
-          <label htmlFor="song">
-            <img src={song ? assets.upload_added : assets.upload_song} className='w-24 cursor-pointer' alt="" />
-          </label>
-        </div>
-        <div className='flex flex-col gap-4'>
-          <p>Upload Image</p>
-          <input
-            onChange={(e) => setImage(e.target.files[0])}
-            type="file"
-            id='image'
-            accept='image/*'
-            hidden
-            disabled={useAlbumImage}
-          />
-          <label htmlFor="image" className={useAlbumImage ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}>
-            <img
-              src={image instanceof File ? URL.createObjectURL(image) : assets.upload_area}
-              className='w-24'
-              alt=""
+        {!spotifyUrl && (
+          <div className='flex flex-col gap-4'>
+            <p>Upload song</p>
+            <input onChange={(e) => setSong(e.target.files[0])} type="file" id='song' accept='audio/*' hidden/>
+            <label htmlFor="song">
+              <img src={song ? assets.upload_added : assets.upload_song} className='w-24 cursor-pointer' alt="" />
+            </label>
+          </div>
+        )}
+        {/* Show image upload when Spotify URL is not being used */}
+        {!spotifyUrl && (
+          <div className='flex flex-col gap-4'>
+            <p>Upload Image</p>
+            <input
+              onChange={(e) => setImage(e.target.files[0])}
+              type="file"
+              id='image'
+              accept='image/*'
+              hidden
+              disabled={useAlbumImage}
             />
-            {useAlbumImage && album !== "none" && (
-              <div className="text-xs text-green-600 mt-1 text-center">Using album image</div>
-            )}
-          </label>
-        </div>
+            <label htmlFor="image" className={useAlbumImage ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}>
+              <img
+                src={image instanceof File ? URL.createObjectURL(image) : assets.upload_area}
+                className='w-24'
+                alt=""
+              />
+              {useAlbumImage && album !== "none" && (
+                <div className="text-xs text-green-600 mt-1 text-center">Using album image</div>
+              )}
+            </label>
+          </div>
+        )}
+
         <div className='flex flex-col gap-4'>
           <p>Upload Lyrics (LRC)</p>
           <input onChange={(e) => setLrcFile(e.target.files[0])} type="file" id='lrc' accept='.lrc' hidden/>
@@ -358,19 +403,51 @@ const AddSong = () => {
       </div>
 
       {/* YouTube URL input field - without separate fetch button */}
-      <div className='flex flex-col gap-2.5 w-full'>
-        <p>YouTube URL (optional)</p>
-        <div className='flex items-center border-2 border-gray-400 focus-within:border-green-600'>
-          <span className='px-2 text-red-600'><FaYoutube size={24} /></span>
-          <input 
-            onChange={(e) => setYoutubeUrl(e.target.value)} 
-            value={youtubeUrl} 
-            className='bg-transparent outline-none p-2.5 flex-grow' 
-            placeholder='https://www.youtube.com/watch?v=...' 
-            type="text"
-          />
+      <div className='flex flex-col gap-6 w-full'>
+        <div className='text-sm text-gray-500 bg-gray-100 p-3 rounded'>
+          You can add a song using either a Spotify track URL (recommended) or a YouTube URL.
+          The system will automatically fetch the song details and audio.
         </div>
-        <p className='text-xs text-gray-500'>Enter a YouTube URL to automatically fetch song details when adding</p>
+
+        {/* Spotify URL input field */}
+        <div className='flex flex-col gap-2.5'>
+          <p>Spotify Track URL (recommended)</p>
+          <div className='flex items-center border-2 border-gray-400 focus-within:border-green-600'>
+            <span className='px-2 text-green-600'><FaSpotify size={24} /></span>
+            <input
+              onChange={(e) => {
+                setSpotifyUrl(e.target.value);
+                if (e.target.value) setYoutubeUrl("");
+              }}
+              value={spotifyUrl}
+              className='bg-transparent outline-none p-2.5 flex-grow'
+              placeholder='https://open.spotify.com/track/...'
+              type="text"
+              disabled={fetchingMetadata}
+            />
+          </div>
+          <p className='text-xs text-gray-500'>Enter a Spotify track URL to automatically fetch song details and audio</p>
+        </div>
+
+        {/* YouTube URL input field */}
+        <div className='flex flex-col gap-2.5'>
+          <p>YouTube URL (alternative)</p>
+          <div className='flex items-center border-2 border-gray-400 focus-within:border-green-600'>
+            <span className='px-2 text-red-600'><FaYoutube size={24} /></span>
+            <input
+              onChange={(e) => {
+                setYoutubeUrl(e.target.value);
+                if (e.target.value) setSpotifyUrl("");
+              }}
+              value={youtubeUrl}
+              className='bg-transparent outline-none p-2.5 flex-grow'
+              placeholder='https://www.youtube.com/watch?v=...'
+              type="text"
+              disabled={fetchingMetadata || spotifyUrl !== ""}
+            />
+          </div>
+          <p className='text-xs text-gray-500'>Or enter a YouTube URL to fetch song details</p>
+        </div>
       </div>
 
       <div className='flex flex-col gap-2.5'>
